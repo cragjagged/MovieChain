@@ -50,7 +50,7 @@ jobs:
         shell: pwsh
         run: |
           choco install nssm -y --no-progress
-          Copy-Item (Get-Command nssm).Source "installer\nssm.exe"
+          Copy-Item "C:\ProgramData\chocolatey\lib\NSSM\tools\nssm.exe" "installer\nssm.exe"
 
       - name: Build installer with Inno Setup
         shell: pwsh
