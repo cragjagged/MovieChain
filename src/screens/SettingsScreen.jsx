@@ -1,4 +1,5 @@
 import { T } from "../theme.js";
+import { STATE_VERSION } from "../constants.js";
 import { useConfigStore } from "../stores/configStore.js";
 import { useChainStore } from "../stores/chainStore.js";
 import { useEmbyStore } from "../stores/embyStore.js";
@@ -31,7 +32,7 @@ export function SettingsScreen({ go }) {
       const storage = Object.fromEntries(
         Object.entries(all).filter(([k]) => !k.startsWith('mc:tmdblinks:'))
       );
-      const payload = JSON.stringify({ version: 1, type: "full-backup", exportedAt: new Date().toISOString(), storage }, null, 2);
+      const payload = JSON.stringify({ version: 1, stateVersion: STATE_VERSION, type: "full-backup", exportedAt: new Date().toISOString(), storage }, null, 2);
       download(payload, `movie-chain-backup-${today()}.json`);
     } catch (e) { setError("Export failed: " + (e?.message || e)); }
   };
@@ -45,7 +46,14 @@ export function SettingsScreen({ go }) {
         const data = JSON.parse(ev.target.result);
 
         if (data.type === "full-backup" && data.storage) {
-          if (!window.confirm("Restore full backup? This will replace your current settings, chain, and Emby library, then reload the app.")) return;
+          const backupVersion = data.stateVersion ?? 1;
+          if (backupVersion > STATE_VERSION) {
+            throw new Error(`Backup is state version ${backupVersion} but this app only supports up to version ${STATE_VERSION} — update the app before restoring this backup.`);
+          }
+          const migrationNote = backupVersion < STATE_VERSION
+            ? ` The backup will be automatically migrated from state version ${backupVersion} to ${STATE_VERSION}.`
+            : '';
+          if (!window.confirm(`Restore full backup? This will replace your current settings, chain, and Emby library, then reload the app.${migrationNote}`)) return;
           await writeStorage(data.storage);
           window.location.reload();
           return;

@@ -1,4 +1,8 @@
 export const TMDB_BASE = "https://api.themoviedb.org/3";
+
+// Increment this when making breaking changes to the shape of stored state.
+// Prevents restoring incompatible backups and detects manually altered DBs.
+export const STATE_VERSION = 1;
 export const TMDB_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 // Maps Emby person role types to our internal credit types.

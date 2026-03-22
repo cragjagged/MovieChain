@@ -11,6 +11,29 @@ export function SystemScreen() {
   const embyConfig = useConfigStore(s => s.embyConfig);
   const { state, triggerCheck, triggerUpdate, lastChecked } = useUpdateStatus();
 
+  const handleChannelChange = async (e) => {
+    const next = e.target.value;
+    const prev = cfg.updateChannel;
+    if (next === prev) return;
+
+    if (next === 'stable' && prev === 'develop') {
+      window.alert(
+        'Switching from develop to stable is not supported — your data may be incompatible with the stable release. Staying on develop.'
+      );
+      return; // controlled select reverts automatically
+    }
+
+    if (next === 'develop' && prev === 'stable') {
+      const ok = window.confirm(
+        'Switch to the develop channel? This cannot be undone — once your data has been updated by a develop build it may be incompatible with stable releases.'
+      );
+      if (!ok) return;
+    }
+
+    await saveCfg({ updateChannel: next });
+    triggerCheck();
+  };
+
   const [cfg, setCfg]         = useState(null);
   const [serverVersion, setServerVersion] = useState(null);
 
@@ -70,7 +93,7 @@ export function SystemScreen() {
               <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Channel</label>
               <select
                 value={cfg.updateChannel}
-                onChange={e => saveCfg({ updateChannel: e.target.value })}
+                onChange={handleChannelChange}
                 style={{ fontSize: 12, padding: "4px 8px" }}
               >
                 <option value="stable">Stable (releases)</option>
