@@ -137,23 +137,6 @@ export function SettingsScreen({ go }) {
         </button>
       </div>
 
-      {/* Server */}
-      <div style={{ padding: "14px 16px", marginBottom: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
-        <SectionLabel>Server</SectionLabel>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: serverCfg ? 8 : 0 }}>
-          <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Port</label>
-          <input
-            type="number"
-            min={1} max={65535}
-            value={portInput}
-            onChange={e => { setPortInput(e.target.value); setPortSaved(false); }}
-            style={{ width: 80, fontSize: 12, padding: "4px 8px", borderRadius: 6, border: `1px solid ${T.borderHov}`, background: T.bg2, color: T.text1 }}
-          />
-          <button onClick={handleSavePort} className="ghost" style={{ fontSize: 12 }}>Save</button>
-          {portSaved && <span style={{ fontSize: 12, color: T.success }}>Saved — restart to apply</span>}
-        </div>
-      </div>
-
       {/* Backup */}
       <div style={{ padding: "14px 16px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
         <SectionLabel>Backup</SectionLabel>

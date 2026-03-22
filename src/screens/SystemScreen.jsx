@@ -109,31 +109,6 @@ export function SystemScreen({ updateStatus }) {
               </div>
             )}
 
-            {/* Port */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Port</label>
-              <input
-                type="number"
-                min={1}
-                max={65535}
-                value={cfg.port ?? serverVersion?.port ?? 7879}
-                onChange={e => setCfg(c => ({ ...c, port: Number(e.target.value) }))}
-                onBlur={async e => {
-                  const port = Number(e.target.value);
-                  if (port < 1 || port > 65535) return;
-                  await saveCfg({ port });
-                  setPortChanged(true);
-                }}
-                disabled={serverVersion?.portFromEnv}
-                style={{ fontSize: 12, padding: "4px 8px", width: 80, opacity: serverVersion?.portFromEnv ? 0.5 : 1 }}
-              />
-              {serverVersion?.portFromEnv ? (
-                <span style={{ fontSize: 12, color: T.text3 }}>Set via PORT environment variable</span>
-              ) : portChanged && (
-                <span style={{ fontSize: 12, color: T.text3 }}>Restart the server to apply</span>
-              )}
-            </div>
-
             {/* Interval */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Check every</label>
@@ -191,6 +166,36 @@ export function SystemScreen({ updateStatus }) {
           </div>
         )}
       </div>
+
+      {/* Server */}
+      {!IS_DEV && serverVersion && (
+        <div style={{ marginBottom: 12, padding: "14px 16px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
+          <div style={{ color: T.text2, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 10, marginBottom: 10 }}>Server</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Port</label>
+            <input
+              type="number"
+              min={1}
+              max={65535}
+              value={cfg?.port ?? serverVersion.port ?? 7879}
+              onChange={e => setCfg(c => ({ ...c, port: Number(e.target.value) }))}
+              onBlur={async e => {
+                const port = Number(e.target.value);
+                if (port < 1 || port > 65535) return;
+                await saveCfg({ port });
+                setPortChanged(true);
+              }}
+              disabled={serverVersion.portFromEnv}
+              style={{ fontSize: 12, padding: "4px 8px", width: 80, opacity: serverVersion.portFromEnv ? 0.5 : 1 }}
+            />
+            {serverVersion.portFromEnv ? (
+              <span style={{ fontSize: 12, color: T.text3 }}>Set via PORT environment variable</span>
+            ) : portChanged && (
+              <span style={{ fontSize: 12, color: T.text3 }}>Restart the server to apply</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Chain Rules */}
       <div style={{ marginBottom: 12, padding: "10px 14px", background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text2, lineHeight: 1.7 }}>
