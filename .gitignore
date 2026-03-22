@@ -24,6 +24,9 @@ data/
 .claude/
 CLAUDE.md
 
+# Local scripts (personal tooling, not for sharing)
+scripts/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

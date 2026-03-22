@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "serve": "npm run build && npm run start"
+    "serve": "npm run build && npm run start",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "express": "^4.21.2",
