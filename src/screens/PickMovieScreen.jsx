@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { T } from "../theme.js";
 import { useConfigStore } from "../stores/configStore.js";
 import { useChainStore, selectCurrentIdx, selectLastType, selectChainIds, selectWatchedIds } from "../stores/chainStore.js";
@@ -11,6 +11,7 @@ import { norm, sortOptions } from "../utils.js";
 import { ErrBanner, WarnBanner, InfoBanner } from "../components/banners.jsx";
 import { Toggle } from "../components/primitives.jsx";
 import { Badge } from "../components/primitives.jsx";
+import { LinkChip } from "../components/LinkChip.jsx";
 import { MovieOptionRow } from "../components/MovieOptionRow.jsx";
 import { Poster } from "../components/Poster.jsx";
 
@@ -28,13 +29,22 @@ export function PickMovieScreen({ go }) {
   const watchedIds   = selectWatchedIds(entries, library);
   const currentMovie = entries[currentIdx]?.movie ?? null;
 
-  const [movieOptions, setMovieOptions] = useState([]);
-  const [loadProgress, setLoadProgress] = useState({ done: 0, total: 0 });
-  const [filmFilter,   setFilmFilter]   = useState("");
-  const [sortBy,       setSortBy]       = useState("emby");
-  const [tmdbLoaded,   setTmdbLoaded]   = useState(false);
-  const [loading,      setLoading]      = useState(false);
-  const [error,        setError]        = useState("");
+  // movieOptions shape: { movie, watched } — links are fetched on demand at selection time
+  const [movieOptions,   setMovieOptions]   = useState([]);
+  const [loadProgress,   setLoadProgress]   = useState({ done: 0, total: 0 });
+  const [filmFilter,     setFilmFilter]     = useState("");
+  const [sortBy,         setSortBy]         = useState("emby");
+  const [tmdbLoaded,     setTmdbLoaded]     = useState(false);
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState("");
+
+  // Selection state — set when user clicks a movie row
+  const [selectedMovieId, setSelectedMovieId] = useState(null);
+  const [linkOptions,     setLinkOptions]     = useState([]);
+  const [linkLoading,     setLinkLoading]     = useState(false);
+
+  // Cache current movie's credits across selections (reset on startNext)
+  const currentCreditsRef = useRef(null);
 
   // Custom link state (history mode)
   const [customStep,   setCustomStep]   = useState(null); // null | "search" | "details"
@@ -69,27 +79,14 @@ export function PickMovieScreen({ go }) {
       .slice(0, 40);
   })();
 
-  // ── mergeIntoOptions ────────────────────────────────────────────────────────
-  const mergeIntoOptions = useCallback((optMap, person, movies) => {
-    for (const m of movies) {
-      const sid = String(m.id);
-      if (chainIds.has(sid) || !m.title) continue;
-      const isWatched = watchedIds.has(sid);
-      if (!optMap.has(sid)) optMap.set(sid, { movie: m, links: [], watched: isWatched });
-      const links = optMap.get(sid).links;
-      if (!links.some(l => l.person.personId === person.personId && l.type === person.type))
-        links.push({ person, type: person.type });
-    }
-  }, [chainIds, watchedIds]);
-
   // ── loadFromTmdb ────────────────────────────────────────────────────────────
   // Fetches TMDB filmographies for the current movie's credits on demand.
-  // Checks a 24h cache first. Merges results into existing Emby candidates,
-  // adding non-library films and upgrading any Actor → Actress entries where
-  // TMDB gender data confirms it.
+  // Checks a 24h cache first. Merges movie list into existing Emby candidates
+  // (links are not stored in state — fetched fresh at selection time instead).
   const loadFromTmdb = useCallback(async () => {
     if (!tmdbKey || !currentMovie) return;
     setLoading(true); setError(""); setLoadProgress({ done: 0, total: 0 });
+    setSelectedMovieId(null); setLinkOptions([]);
     try {
       const skey = `mc:tmdblinks:${currentMovie.id}`;
       let entries;
@@ -134,30 +131,15 @@ export function PickMovieScreen({ go }) {
         await store.set(skey, JSON.stringify({ cachedAt: Date.now(), entries }));
       }
 
-      // Merge into existing options (Emby candidates stay, TMDB adds non-library films)
+      // Merge into movieOptions — only store { movie, watched }, links not needed
       setMovieOptions(prev => {
         const merged = new Map(prev.map(o => [String(o.movie.id), o]));
         for (const { movie, links } of entries) {
           const msid = String(movie.id);
           if (chainIds.has(msid) || !movie.title) continue;
-          const isWatched = watchedIds.has(msid);
-          if (!merged.has(msid)) merged.set(msid, { movie, links: [], watched: isWatched });
-          const existing = merged.get(msid).links;
-          for (const l of links) {
-            if (l.type === lastType) continue;
-            // Upgrade Actor → Actress if TMDB gender confirms it
-            const actorIdx = l.type === "Actress"
-              ? existing.findIndex(e => e.person?.personId === l.personId && e.type === "Actor")
-              : -1;
-            if (actorIdx !== -1) {
-              existing[actorIdx] = { person: { personId: l.personId, name: l.name }, type: "Actress" };
-            } else if (!existing.some(e => e.person?.personId === l.personId && e.type === l.type)) {
-              existing.push({ person: { personId: l.personId, name: l.name }, type: l.type });
-            }
-          }
-        }
-        for (const [msid, opt] of merged.entries()) {
-          if (opt.links.length === 0) merged.delete(msid);
+          // Skip movies where every possible connection is blocked by lastType
+          if (lastType && links.every(l => l.type === lastType)) continue;
+          if (!merged.has(msid)) merged.set(msid, { movie, watched: watchedIds.has(msid) });
         }
         return [...merged.values()];
       });
@@ -168,16 +150,17 @@ export function PickMovieScreen({ go }) {
   }, [tmdbKey, currentMovie, lastType, chainIds, watchedIds]);
 
   // ── startNext ───────────────────────────────────────────────────────────────
-  // Builds the candidate list from Emby (local, no TMDB calls for the list itself).
-  // Makes one TMDB credits call to resolve Actor vs Actress by gender.
-  // If no Emby is connected, falls through to loadFromTmdb automatically.
+  // Builds the candidate movie list from Emby (local, no TMDB API calls).
+  // Links are not tracked here — fetched fresh from TMDB when a movie is selected.
+  // Falls through to loadFromTmdb automatically when Emby is not connected.
   const startNext = useCallback(async () => {
     setError(""); setMovieOptions([]); setFilmFilter(""); setTmdbLoaded(false);
+    setSelectedMovieId(null); setLinkOptions([]);
     setCustomStep(null); setCustomQuery(""); setCustomMovie(null); setCustomPerson(""); setCustomType("");
     setLoadProgress({ done: 0, total: 0 });
+    currentCreditsRef.current = null;
 
     if (!(embyConfig && library && currentMovie?.embyId)) {
-      // No Emby: go straight to TMDB
       await loadFromTmdb();
       return;
     }
@@ -187,6 +170,7 @@ export function PickMovieScreen({ go }) {
       const embyPeople = await fetchEmbyItemPeople(embyConfig, currentMovie.embyId);
       setLoadProgress({ done: 0, total: embyPeople.length });
 
+      // movieId → { movie, watched, typeSet } — typeSet for lastType filtering only
       const optMap  = new Map();
       const results = await Promise.allSettled(
         embyPeople.map(ep =>
@@ -199,46 +183,64 @@ export function PickMovieScreen({ go }) {
       for (const r of results) {
         if (r.status !== "fulfilled" || !r.value) continue;
         const { ep, movies } = r.value;
-        const creditType   = EMBY_TYPE_MAP[ep.Type];
-        const tmdbPersonId = ep.ProviderIds?.Tmdb || ep.ProviderIds?.tmdb || null;
-        const person       = { personId: tmdbPersonId ? Number(tmdbPersonId) : ep.Id, name: ep.Name, type: creditType };
-        const tmdbMovies   = movies.map(m => {
+        const creditType = EMBY_TYPE_MAP[ep.Type];
+        for (const m of movies) {
           const tid = m.ProviderIds?.Tmdb || m.ProviderIds?.tmdb;
-          if (!tid) return null;
-          return { id: Number(tid), title: m.Name, release_date: m.ProductionYear ? `${m.ProductionYear}-01-01` : "", vote_average: m.CommunityRating || 0, poster_path: null };
-        }).filter(Boolean);
-        mergeIntoOptions(optMap, person, tmdbMovies);
+          if (!tid) continue;
+          const sid = String(tid);
+          if (chainIds.has(sid)) continue;
+          const movie = { id: Number(tid), title: m.Name, release_date: m.ProductionYear ? `${m.ProductionYear}-01-01` : "", vote_average: m.CommunityRating || 0, poster_path: null };
+          if (!optMap.has(sid)) optMap.set(sid, { movie, watched: watchedIds.has(sid), typeSet: new Set() });
+          optMap.get(sid).typeSet.add(creditType);
+        }
       }
 
-      // Gender correction: one TMDB credits call to upgrade Actor → Actress.
-      // Emby collapses all cast to "Actor" — TMDB gender field fixes this.
-      if (tmdbKey) {
-        try {
-          const creditsData = await tmdb(tmdbKey, `/movie/${currentMovie.id}/credits`);
-          const femaleIds   = new Set(
-            (creditsData.cast || []).filter(m => m.gender === 1).map(m => String(m.id))
-          );
-          for (const opt of optMap.values()) {
-            for (const link of opt.links) {
-              if (link.type === "Actor" && link.person.personId && femaleIds.has(String(link.person.personId))) {
-                link.type        = "Actress";
-                link.person.type = "Actress";
-              }
-            }
-          }
-        } catch {} // best-effort — Actor/Actress distinction degrades gracefully
-      }
+      // Filter: exclude movies where every Emby-known connection is blocked by lastType.
+      // (Gender may be wrong here — selectMovie will re-check with TMDB at pick time.)
+      const options = [...optMap.values()]
+        .filter(o => !lastType || [...o.typeSet].some(t => t !== lastType))
+        .map(({ movie, watched }) => ({ movie, watched }));
 
-      // Filter links blocked by the back-to-back rule; drop movies with no valid links
-      for (const [sid, opt] of optMap.entries()) {
-        opt.links = opt.links.filter(l => l.type !== lastType);
-        if (opt.links.length === 0) optMap.delete(sid);
-      }
-
-      setMovieOptions([...optMap.values()]);
+      setMovieOptions(options);
     } catch (e) { setError("Failed to load options: " + (e?.message || e)); }
     finally { setLoading(false); }
-  }, [embyConfig, library, currentMovie, lastType, chainIds, watchedIds, tmdbKey, mergeIntoOptions, loadFromTmdb]);
+  }, [embyConfig, library, currentMovie, lastType, chainIds, watchedIds, loadFromTmdb]);
+
+  // ── selectMovie ─────────────────────────────────────────────────────────────
+  // Called when the user clicks a movie row. Fetches credits for both the current
+  // movie and the selected movie from TMDB, finds shared people, and presents the
+  // valid link types. Gender is correct here because TMDB data is authoritative.
+  const selectMovie = useCallback(async (movie) => {
+    if (selectedMovieId === movie.id) {
+      setSelectedMovieId(null); setLinkOptions([]);
+      return;
+    }
+    setSelectedMovieId(movie.id);
+    setLinkOptions([]);
+    setLinkLoading(true);
+    try {
+      // Current movie credits are cached — same person set for all selections
+      if (!currentCreditsRef.current) {
+        currentCreditsRef.current = await tmdb(tmdbKey, `/movie/${currentMovie.id}/credits`);
+      }
+      const selectedCredits = await tmdb(tmdbKey, `/movie/${movie.id}/credits`);
+
+      // IDs of everyone credited on the selected movie
+      const selectedIds = new Set([
+        ...(selectedCredits.cast || []).map(m => m.id),
+        ...(selectedCredits.crew || []).map(m => m.id),
+      ]);
+
+      // People on the current movie who also appear on the selected movie,
+      // with their correct type (gender-accurate from TMDB), minus lastType
+      const links = extractCredits(currentCreditsRef.current)
+        .filter(p => p.type !== lastType && selectedIds.has(p.personId))
+        .map(p => ({ person: { personId: p.personId, name: p.name }, type: p.type }));
+
+      setLinkOptions(links);
+    } catch (e) { setError("Failed to load links: " + (e?.message || e)); }
+    finally { setLinkLoading(false); }
+  }, [selectedMovieId, tmdbKey, currentMovie, lastType]);
 
   // ── pickMovie ───────────────────────────────────────────────────────────────
   // Validates series order (unless history mode), then appends to chain.
@@ -268,7 +270,6 @@ export function PickMovieScreen({ go }) {
   };
 
   // ── pickCustomMovie ─────────────────────────────────────────────────────────
-  // Adds a film via a manually entered credit (history mode, credits not in TMDB).
   const pickCustomMovie = async () => {
     if (!customMovie || !customPerson.trim() || !customType.trim()) return;
     setLoading(true); setError("");
@@ -304,7 +305,7 @@ export function PickMovieScreen({ go }) {
         {watchedCount > 0 && !allowWatched && (
           <> · <span style={{ cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dashed", color: T.text2 }} onClick={() => setAllowWatched(true)}>{watchedCount} watched hidden</span></>
         )}
-        {" · "}Click a link chip to add via that connection.
+        {" · "}Click a movie to see link options.
       </p>
 
       {/* Controls */}
@@ -402,7 +403,6 @@ export function PickMovieScreen({ go }) {
 
       <ErrBanner msg={error} onDismiss={() => setError("")} />
 
-      {/* No library matches — offer TMDB load */}
       {noEmbyMatch && (
         tmdbKey
           ? <InfoBanner msg="No matches in your library." />
@@ -421,14 +421,41 @@ export function PickMovieScreen({ go }) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {sorted.slice(0, 100).map(option => (
-          <MovieOptionRow
-            key={option.movie.id}
-            option={option}
-            onSelect={pickMovie}
-            disabled={loading}
-            embyStatus={embyConfig ? embyStatusFor(library, option.movie.id) : null}
-            embyImgSrc={embyImgFor(embyConfig, library, option.movie.id)}
-          />
+          <div key={option.movie.id}>
+            <MovieOptionRow
+              option={option}
+              onClick={() => !loading && selectMovie(option.movie)}
+              isSelected={selectedMovieId === option.movie.id}
+              disabled={loading}
+              embyStatus={embyConfig ? embyStatusFor(library, option.movie.id) : null}
+              embyImgSrc={embyImgFor(embyConfig, library, option.movie.id)}
+            />
+            {selectedMovieId === option.movie.id && (
+              <div style={{
+                padding: "10px 14px",
+                background: T.bg1,
+                border: `1px solid ${T.accent}44`,
+                borderTop: "none",
+                borderRadius: "0 0 8px 8px",
+              }}>
+                {linkLoading && (
+                  <span style={{ fontSize: 12, color: T.text2 }}>Finding connections…</span>
+                )}
+                {!linkLoading && linkOptions.length === 0 && (
+                  <span style={{ fontSize: 12, color: T.text3 }}>
+                    No valid links — all shared credits use <Badge type={lastType} /> (blocked).
+                  </span>
+                )}
+                {!linkLoading && linkOptions.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {linkOptions.map((link, i) => (
+                      <LinkChip key={i} link={link} disabled={loading} onClick={() => !loading && pickMovie(option.movie, link)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         ))}
         {sorted.length === 0 && !noEmbyMatch && !loading && (
           <p style={{ fontSize: 13, color: T.text2 }}>No movies match your filter.</p>
@@ -440,7 +467,6 @@ export function PickMovieScreen({ go }) {
         )}
       </div>
 
-      {/* Load from TMDB — shown below results (or prominently when no Emby matches) */}
       {showTmdbButton && (
         <button
           onClick={loadFromTmdb}
