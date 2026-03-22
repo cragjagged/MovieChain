@@ -343,6 +343,9 @@ export default function MovieChain() {
       }
       .mc-root input:focus, .mc-root select:focus { border-color: ${T.accent} !important; }
       .mc-root input::placeholder { color: ${T.text3} !important; }
+      .mc-root input[type=number]::-webkit-outer-spin-button,
+      .mc-root input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+      .mc-root input[type=number] { -moz-appearance: textfield; }
       .mc-root button {
         background: ${T.bg3}; color: ${T.text1}; border: 1px solid ${T.borderHov};
         border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 500;
