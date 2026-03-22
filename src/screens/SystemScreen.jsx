@@ -12,12 +12,11 @@ export function SystemScreen() {
   const { state, triggerCheck, triggerUpdate } = useUpdateStatus();
 
   const [cfg, setCfg]         = useState(null);
-  const [repoInput, setRepoInput] = useState("");
   const [serverVersion, setServerVersion] = useState(null);
 
   useEffect(() => {
     if (IS_DEV) return;
-    fetch('/api/update/config').then(r => r.json()).then(c => { setCfg(c); setRepoInput(c.githubRepo || ""); }).catch(() => {});
+    fetch('/api/update/config').then(r => r.json()).then(setCfg).catch(() => {});
     fetch('/api/version').then(r => r.json()).then(setServerVersion).catch(() => {});
   }, []);
 
@@ -65,20 +64,6 @@ export function SystemScreen() {
           <p style={{ fontSize: 12, color: T.text3, margin: 0 }}>Connecting to server…</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-            {/* Repo */}
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: T.text3, marginBottom: 4 }}>GitHub repository</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  value={repoInput}
-                  onChange={e => setRepoInput(e.target.value)}
-                  onBlur={() => repoInput !== cfg.githubRepo && saveCfg({ githubRepo: repoInput })}
-                  placeholder="owner/repo"
-                  style={{ flex: 1, fontSize: 12 }}
-                />
-              </div>
-            </div>
 
             {/* Channel */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -129,7 +114,6 @@ export function SystemScreen() {
               ) : (
                 <button
                   onClick={triggerCheck}
-                  disabled={!cfg.githubRepo}
                   className="ghost"
                   style={{ fontSize: 12 }}
                 >

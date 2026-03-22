@@ -63,7 +63,7 @@ app.get('/api/update/status', (req, res) => {
 app.post('/api/update/check', async (_req, res) => {
   try {
     const cfg    = await readConfig();
-    const result = await checkForUpdates(cfg.githubRepo, cfg.updateChannel);
+    const result = await checkForUpdates(cfg.updateChannel);
     res.json(result);
     if (result.available && getUpdateState().phase === 'idle') {
       broadcast({ ...getUpdateState(), phase: 'available', ...result });
@@ -78,7 +78,7 @@ app.post('/api/update/apply', async (_req, res) => {
   }
   const cfg = await readConfig();
   res.json({ ok: true });
-  applyUpdate(cfg.githubRepo, cfg.updateChannel, broadcast);
+  applyUpdate(cfg.updateChannel, broadcast);
 });
 
 // ── Storage API ───────────────────────────────────────────────────────────────

@@ -29,7 +29,8 @@ export function getCurrentVersion() { return _version; }
 export function getCurrentSha()     { return _sha; }
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const DEFAULT_CONFIG = { githubRepo: '', updateChannel: 'stable', checkIntervalHours: 1 };
+const GITHUB_REPO    = 'cragjagged/MovieChain';
+const DEFAULT_CONFIG = { updateChannel: 'stable', checkIntervalHours: 1 };
 
 export async function readConfig() {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(await readFile(CONFIG_PATH, 'utf-8')) }; }
@@ -99,11 +100,10 @@ function downloadFile(url, dest) {
 }
 
 // ── Check ─────────────────────────────────────────────────────────────────────
-export async function checkForUpdates(repo, channel) {
-  if (!repo) return { available: false, reason: 'no-repo' };
+export async function checkForUpdates(channel) {
   try {
     if (channel === 'develop') {
-      const data      = await fetchJson(`https://api.github.com/repos/${repo}/commits/develop`);
+      const data      = await fetchJson(`https://api.github.com/repos/${GITHUB_REPO}/commits/develop`);
       const latestSha = data.sha;
       const shortSha  = latestSha?.slice(0, 7);
       const current   = getCurrentSha();
@@ -112,12 +112,12 @@ export async function checkForUpdates(repo, channel) {
           available: true, channel: 'develop',
           sha: latestSha, shortSha,
           label: `dev@${shortSha}`,
-          tarballUrl: `https://api.github.com/repos/${repo}/tarball/develop`,
+          tarballUrl: `https://api.github.com/repos/${GITHUB_REPO}/tarball/develop`,
         };
       }
       return { available: false };
     } else {
-      const data = await fetchJson(`https://api.github.com/repos/${repo}/releases/latest`);
+      const data = await fetchJson(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
       if (!data.tag_name) return { available: false };
       const latest = data.tag_name.replace(/^v/, '');
       if (semverGt(latest, getCurrentVersion())) {
@@ -137,11 +137,11 @@ export async function checkForUpdates(repo, channel) {
 }
 
 // ── Apply ─────────────────────────────────────────────────────────────────────
-export async function applyUpdate(repo, channel, broadcast) {
+export async function applyUpdate(channel, broadcast) {
   const tmpDir = join(ROOT, '.update-tmp');
   try {
     setState({ phase: 'downloading' }, broadcast);
-    const info = await checkForUpdates(repo, channel);
+    const info = await checkForUpdates(channel);
     if (!info.available) { setState({ phase: 'idle' }, broadcast); return; }
 
     if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true });
@@ -201,8 +201,8 @@ export function startChecker(broadcast) {
   async function tick() {
     try {
       const cfg = await readConfig();
-      if (cfg.githubRepo && state.phase === 'idle') {
-        const result = await checkForUpdates(cfg.githubRepo, cfg.updateChannel);
+      if (state.phase === 'idle') {
+        const result = await checkForUpdates(cfg.updateChannel);
         if (result.available) setState({ phase: 'available', ...result }, broadcast);
       }
     } catch (e) {
