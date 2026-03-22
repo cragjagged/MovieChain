@@ -5,7 +5,7 @@ import { mkdirSync, existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT      = join(__dirname, '..');
-const DATA_DIR  = join(ROOT, 'data');
+const DATA_DIR  = process.env.MC_DATA_DIR || join(ROOT, 'data');
 
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 

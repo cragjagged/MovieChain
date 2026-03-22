@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-installer:
+    # Skip dev tags (e.g. v1.3.0-dev)
+    if: ${{ !endsWith(github.ref_name, '-dev') }}
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies and build frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Prune dev dependencies
+        run: npm prune --omit=dev
+
+      - name: Create pre-built update zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist", "server", "node_modules", "package.json" `
+            -DestinationPath "movie-chain-windows.zip"
+
+      - name: Download portable Node.js
+        shell: pwsh
+        run: |
+          $version = "22.13.1"
+          $zip = "node-v${version}-win-x64.zip"
+          $url = "https://nodejs.org/dist/v${version}/${zip}"
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+          Expand-Archive -Path $zip -DestinationPath "node-portable"
+          New-Item -ItemType Directory -Path "installer\node" -Force | Out-Null
+          Get-ChildItem "node-portable\node-v${version}-win-x64" |
+            Copy-Item -Destination "installer\node" -Recurse -Force
+
+      - name: Download NSSM
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" `
+            -OutFile "nssm.zip" -UseBasicParsing
+          Expand-Archive -Path "nssm.zip" -DestinationPath "nssm-extracted"
+          Copy-Item "nssm-extracted\nssm-2.24\win64\nssm.exe" "installer\nssm.exe"
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=${version}" `
+            "installer\moviechain.iss"
+
+      - name: Upload assets to release
+        shell: bash
+        run: |
+          tag="${{ github.ref_name }}"
+          version="${tag#v}"
+
+          # Create draft release if release.sh hasn't yet (handles race conditions)
+          gh release view "$tag" 2>/dev/null || \
+            gh release create "$tag" --draft \
+              --title "Movie Chain ${tag}" \
+              --notes "See release notes."
+
+          gh release upload "$tag" \
+            "installer/Output/MovieChain-Setup-${version}.exe" \
+            "movie-chain-windows.zip" \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

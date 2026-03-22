@@ -7,8 +7,9 @@ import https from 'https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
-const ROOT       = join(__dirname, '..');
-const DATA_DIR   = join(ROOT, 'data');
+const ROOT         = join(__dirname, '..');
+const DATA_DIR     = process.env.MC_DATA_DIR || join(ROOT, 'data');
+const IS_INSTALLER = process.env.MC_INSTALL_TYPE === 'installer';
 const CONFIG_PATH  = join(DATA_DIR, 'server-config.json');
 const CURRENT_PATH = join(DATA_DIR, 'current.json');
 
@@ -30,7 +31,7 @@ export function getCurrentSha()     { return _sha; }
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const GITHUB_REPO    = 'cragjagged/MovieChain';
-const DEFAULT_CONFIG = { updateChannel: 'stable', checkIntervalHours: 24, port: 7879 };
+const DEFAULT_CONFIG = { updateChannel: 'stable', checkIntervalHours: 24 };
 
 export function readConfigSync() {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) }; }
@@ -126,11 +127,13 @@ export async function checkForUpdates(channel) {
       if (!data.tag_name) return { available: false };
       const latest = data.tag_name.replace(/^v/, '');
       if (semverGt(latest, getCurrentVersion())) {
+        const zipAsset = data.assets?.find(a => a.name === 'movie-chain-windows.zip');
         return {
           available: true, channel: 'stable',
           version: latest, tag: data.tag_name,
           label: `v${latest}`,
           tarballUrl: data.tarball_url,
+          windowsZipUrl: zipAsset?.browser_download_url ?? null,
         };
       }
       return { available: false };
@@ -152,35 +155,59 @@ export async function applyUpdate(channel, broadcast) {
     if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true });
     mkdirSync(tmpDir, { recursive: true });
 
-    await downloadFile(info.tarballUrl, join(tmpDir, 'update.tar.gz'));
+    if (IS_INSTALLER) {
+      // ── Installer path: download pre-built zip, extract with PowerShell ──────
+      if (!info.windowsZipUrl) throw new Error('No Windows update package found for this release.');
+      const zipPath       = join(tmpDir, 'update.zip');
+      const extractedDir  = join(tmpDir, 'extracted');
 
-    setState({ phase: 'extracting' }, broadcast);
-    execSync('tar -xzf update.tar.gz', { cwd: tmpDir });
-    const dirs = readdirSync(tmpDir).filter(e => e !== 'update.tar.gz');
-    if (!dirs.length) throw new Error('Extraction produced no directory');
-    const srcDir = join(tmpDir, dirs[0]);
+      await downloadFile(info.windowsZipUrl, zipPath);
 
-    setState({ phase: 'installing' }, broadcast);
-    execSync('npm ci', { cwd: srcDir, stdio: ['ignore', 'pipe', 'pipe'] });
+      setState({ phase: 'extracting' }, broadcast);
+      execSync(
+        `powershell -Command "Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${extractedDir}' -Force"`,
+        { stdio: ['ignore', 'pipe', 'pipe'] }
+      );
 
-    setState({ phase: 'building' }, broadcast);
-    execSync('npm run build', {
-      cwd: srcDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NODE_ENV: 'production' },
-    });
+      setState({ phase: 'applying' }, broadcast);
+      for (const item of ['dist', 'server', 'node_modules']) {
+        const dest = join(ROOT, item);
+        if (existsSync(dest)) await rm(dest, { recursive: true });
+        await cp(join(extractedDir, item), dest, { recursive: true });
+      }
+      await cp(join(extractedDir, 'package.json'), join(ROOT, 'package.json'));
+    } else {
+      // ── Source/Docker path: download tarball, build from source ──────────────
+      await downloadFile(info.tarballUrl, join(tmpDir, 'update.tar.gz'));
 
-    setState({ phase: 'applying' }, broadcast);
+      setState({ phase: 'extracting' }, broadcast);
+      execSync('tar -xzf update.tar.gz', { cwd: tmpDir });
+      const dirs = readdirSync(tmpDir).filter(e => e !== 'update.tar.gz');
+      if (!dirs.length) throw new Error('Extraction produced no directory');
+      const srcDir = join(tmpDir, dirs[0]);
 
-    const distDest = join(ROOT, 'dist');
-    if (existsSync(distDest)) await rm(distDest, { recursive: true });
-    await cp(join(srcDir, 'dist'), distDest, { recursive: true });
+      setState({ phase: 'installing' }, broadcast);
+      execSync('npm ci', { cwd: srcDir, stdio: ['ignore', 'pipe', 'pipe'] });
 
-    const serverDest = join(ROOT, 'server');
-    if (existsSync(serverDest)) await rm(serverDest, { recursive: true });
-    await cp(join(srcDir, 'server'), serverDest, { recursive: true });
+      setState({ phase: 'building' }, broadcast);
+      execSync('npm run build', {
+        cwd: srcDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'production' },
+      });
 
-    await cp(join(srcDir, 'package.json'), join(ROOT, 'package.json'));
+      setState({ phase: 'applying' }, broadcast);
+
+      const distDest = join(ROOT, 'dist');
+      if (existsSync(distDest)) await rm(distDest, { recursive: true });
+      await cp(join(srcDir, 'dist'), distDest, { recursive: true });
+
+      const serverDest = join(ROOT, 'server');
+      if (existsSync(serverDest)) await rm(serverDest, { recursive: true });
+      await cp(join(srcDir, 'server'), serverDest, { recursive: true });
+
+      await cp(join(srcDir, 'package.json'), join(ROOT, 'package.json'));
+    }
 
     if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
     await writeFile(CURRENT_PATH, JSON.stringify({
