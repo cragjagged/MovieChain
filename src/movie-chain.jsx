@@ -403,7 +403,7 @@ export default function MovieChain() {
         {screen === "pick-movie"   && <PickMovieScreen go={go} />}
         {screen === "reports"      && <ReportsScreen />}
         {screen === "sequels"      && <SequelsScreen />}
-        {screen === "system"       && <SystemScreen />}
+        {screen === "system"       && <SystemScreen updateStatus={updateStatus} />}
         {screen === "chain"        && <ChainScreen error={error} setError={setError} sortOrder={chainSortOrder} setSortOrder={setChainSortOrder} />}
       </div>
     </div>

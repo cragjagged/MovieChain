@@ -3,13 +3,11 @@ import { T } from "../theme.js";
 import { useConfigStore } from "../stores/configStore.js";
 import { Badge } from "../components/primitives.jsx";
 import { ALL_TYPES } from "../constants.js";
-import { useUpdateStatus } from "../hooks/useUpdateStatus.js";
-
 const IS_DEV = import.meta.env.DEV;
 
-export function SystemScreen() {
+export function SystemScreen({ updateStatus }) {
   const embyConfig = useConfigStore(s => s.embyConfig);
-  const { state, triggerCheck, triggerUpdate, lastChecked } = useUpdateStatus();
+  const { state, triggerCheck, triggerUpdate, lastChecked } = updateStatus;
 
   const handleChannelChange = async (e) => {
     const next = e.target.value;
