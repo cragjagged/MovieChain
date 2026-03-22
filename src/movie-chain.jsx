@@ -7,7 +7,6 @@ import { Badge } from "./components/primitives.jsx";
 import { embyImgFor, embyThumbFor } from "./api/emby.js";
 import { store } from "./stores/storage.js";
 import { formatTime } from "./utils.js";
-import { useTmdbPrefetch } from "./hooks/useTmdbPrefetch.js";
 import { useCollectionPrefetch } from "./hooks/useCollectionPrefetch.js";
 import { useUpdateStatus } from "./hooks/useUpdateStatus.js";
 import { SetupScreen }       from "./screens/SetupScreen.jsx";
@@ -277,7 +276,6 @@ export default function MovieChain() {
   const currentMovie = currentEntry?.movie ?? null;
   const currentLink  = currentEntry?.link ?? null;
   const sequelsVersion = useChainStore(s => s.sequelsVersion);
-  const { prefetch } = useTmdbPrefetch();
   useCollectionPrefetch();
 
   const [sequelCandidates, setSequelCandidates] = useState([]);
@@ -374,11 +372,6 @@ export default function MovieChain() {
     document.head.appendChild(el);
     return () => el.remove();
   }, []);
-
-  // ── Prefetch TMDB links whenever the chain's last entry changes ────────────
-  useEffect(() => {
-    if (entries.length > 0) prefetch(entries[entries.length - 1].movie.id);
-  }, [entries, prefetch]);
 
   // ── Background Emby sync on boot + scheduled interval ─────────────────────
   useEffect(() => {
