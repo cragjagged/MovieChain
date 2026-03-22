@@ -5,36 +5,13 @@ import { useChainStore } from "../stores/chainStore.js";
 import { useEmbyStore } from "../stores/embyStore.js";
 import { ErrBanner } from "../components/banners.jsx";
 import { SectionLabel, StatusPill } from "../components/primitives.jsx";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export function SettingsScreen({ go }) {
   const { tmdbKey, embyConfig, setEmbyConfig, syncInterval, setSyncInterval } = useConfigStore();
   const { entries, clear: clearChain, importChain } = useChainStore();
   const { library, status, lastSynced, syncLibrary, clearLibrary } = useEmbyStore();
   const [error, setError] = useState("");
-  const [serverCfg, setServerCfg] = useState(null);
-  const [portInput, setPortInput] = useState("");
-  const [portSaved, setPortSaved] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/update/config').then(r => r.json()).then(cfg => {
-      setServerCfg(cfg);
-      setPortInput(String(cfg.port ?? 7879));
-    }).catch(() => {});
-  }, []);
-
-  const handleSavePort = async () => {
-    const port = parseInt(portInput, 10);
-    if (isNaN(port) || port < 1 || port > 65535) { setError("Invalid port number (1–65535)."); return; }
-    await fetch('/api/update/config', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ port }),
-    }).catch(() => {});
-    setServerCfg(c => ({ ...c, port }));
-    setPortSaved(true);
-    setTimeout(() => setPortSaved(false), 3000);
-  };
 
   const handleDisconnectEmby = () => {
     setEmbyConfig(null);
