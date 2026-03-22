@@ -20,12 +20,7 @@ db.exec(`
   )
 `);
 
-const _get = db.prepare('SELECT value FROM kv WHERE key = ?');
-const _set = db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)');
-const _del = db.prepare('DELETE FROM kv WHERE key = ?');
-const _all = db.prepare('SELECT key, value FROM kv');
-
-export function dbGet(key)        { return _get.get(key)?.value ?? null; }
-export function dbSet(key, value) { _set.run(key, String(value)); }
-export function dbDelete(key)     { _del.run(key); }
-export function dbAll()           { return _all.all(); }
+export function dbGet(key)        { return db.prepare('SELECT value FROM kv WHERE key = ?').get(key)?.value ?? null; }
+export function dbSet(key, value) { db.prepare('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)').run(key, String(value)); }
+export function dbDelete(key)     { db.prepare('DELETE FROM kv WHERE key = ?').run(key); }
+export function dbAll()           { return db.prepare('SELECT key, value FROM kv').all(); }
