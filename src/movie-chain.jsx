@@ -210,9 +210,11 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
               </svg>
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.text1 }}>Last Link</span>
             </div>
-            <div style={{ padding: "8px 10px 0", background: T.bg2, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: T.text1 }}>{currentLink.person.name}</span>
-              <Badge type={currentLink.type} />
+            <div style={{ padding: "8px 10px", background: T.bg2, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "center", background: T.bg3, border: `1px solid ${T.border}`, borderRadius: 20, padding: "4px 10px" }}>
+                <span style={{ fontSize: 12, color: T.text1, whiteSpace: "nowrap" }}>{currentLink.person.name}</span>
+                <Badge type={currentLink.type} />
+              </div>
             </div>
             <WidgetThumb
               key={currentMovie.id}
