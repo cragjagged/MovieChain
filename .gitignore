@@ -20,6 +20,9 @@ dist-ssr
 data/
 .update-tmp/
 
+# Claude Code local settings (personal permissions, not for sharing)
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
