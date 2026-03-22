@@ -1,0 +1,15 @@
+services:
+  movie-chain:
+    build:
+      context: .
+      args:
+        APP_VERSION: "1.0.0"
+        GIT_SHA: "unknown"
+    container_name: movie-chain
+    ports:
+      - "7879:7879"
+    volumes:
+      - ./data:/app/data
+    environment:
+      PORT: "7879"
+    restart: unless-stopped

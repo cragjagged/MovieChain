@@ -1,0 +1,14 @@
+node_modules
+dist
+.update-tmp
+data
+*.log
+.git
+.gitignore
+.env
+.env.*
+README.md
+CLAUDE.md
+.vscode
+.idea
+.DS_Store
