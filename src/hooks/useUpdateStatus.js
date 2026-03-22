@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 
 export function useUpdateStatus() {
-  const [serverState, setServerState]   = useState(null);
-  const [needsReload, setNeedsReload]   = useState(false);
-  const wasRestartingRef                = useRef(false);
+  const [serverState, setServerState]     = useState(null);
+  const [needsReload, setNeedsReload]     = useState(false);
+  const [dismissedLabel, setDismissedLabel] = useState(null);
+  const wasRestartingRef                  = useRef(false);
 
   useEffect(() => {
     if (import.meta.env.DEV) return;
@@ -32,11 +33,17 @@ export function useUpdateStatus() {
     return () => { clearTimeout(reconnectTimer); es?.close(); };
   }, []);
 
+  const availableDismissed = dismissedLabel !== null &&
+    serverState?.phase === 'available' &&
+    serverState.label === dismissedLabel;
+
   return {
-    state:         serverState,
+    state:             serverState,
     needsReload,
-    dismissReload: () => setNeedsReload(false),
-    triggerUpdate: () => fetch('/api/update/apply', { method: 'POST' }).catch(() => {}),
-    triggerCheck:  () => fetch('/api/update/check', { method: 'POST' }).catch(() => {}),
+    dismissReload:     () => setNeedsReload(false),
+    triggerUpdate:     () => fetch('/api/update/apply', { method: 'POST' }).catch(() => {}),
+    triggerCheck:      () => fetch('/api/update/check', { method: 'POST' }).catch(() => {}),
+    availableDismissed,
+    dismissAvailable:  () => setDismissedLabel(serverState?.label ?? ''),
   };
 }

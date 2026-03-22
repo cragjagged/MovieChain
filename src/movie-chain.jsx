@@ -8,6 +8,7 @@ import { embyImgFor, embyThumbFor } from "./api/emby.js";
 import { store } from "./stores/storage.js";
 import { useTmdbPrefetch } from "./hooks/useTmdbPrefetch.js";
 import { useCollectionPrefetch } from "./hooks/useCollectionPrefetch.js";
+import { useUpdateStatus } from "./hooks/useUpdateStatus.js";
 import { SetupScreen }       from "./screens/SetupScreen.jsx";
 import { ChainScreen }       from "./screens/ChainScreen.jsx";
 import { PickMovieScreen }   from "./screens/PickMovieScreen.jsx";
@@ -43,7 +44,7 @@ function WidgetThumb({ src, alt, title, year, extra, children }) {
   );
 }
 
-function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library, embyConfig, status, lastSynced, syncLibrary, suggestedSequel, onCycleSequel, hasMultipleSequels }) {
+function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library, embyConfig, status, lastSynced, syncLibrary, suggestedSequel, onCycleSequel, hasMultipleSequels, updateAvailable }) {
   const isChainActive    = ["chain", "search-first", "pick-movie"].includes(screen);
   const isSettingsActive = screen === "settings";
   const isReportsActive  = screen === "reports";
@@ -103,7 +104,7 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
     </svg>
   );
 
-  const navItem = (label, Icon, active, onClick) => (
+  const navItem = (label, Icon, active, onClick, dot) => (
     <button
       key={label}
       onClick={onClick}
@@ -114,9 +115,15 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
         color: active ? T.accent : T.text2,
         fontSize: 13, fontWeight: active ? 600 : 500,
         marginBottom: 2, justifyContent: "flex-start", gap: 9,
+        position: "relative",
       }}
     >
       <Icon />{label}
+      {dot && <span style={{
+        position: "absolute", top: 7, right: 9,
+        width: 7, height: 7, borderRadius: "50%",
+        background: T.accent, border: `1.5px solid ${T.bg1}`,
+      }} />}
     </button>
   );
 
@@ -152,7 +159,7 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
         {navItem("Chain",   IconChain,    isChainActive,   () => go("chain"))}
         {navItem("Sequels", IconSequels,  isSequelsActive, () => go("sequels"))}
         {navItem("Reports", IconReports,  isReportsActive, () => go("reports"))}
-        {navItem("System",  IconSystem,   isSystemActive,  () => go("system"))}
+        {navItem("System",  IconSystem,   isSystemActive,  () => go("system"), updateAvailable && !isSystemActive)}
         {navItem("Settings",IconSettings, isSettingsActive,() => go("settings"))}
       </div>
 
@@ -253,6 +260,7 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
 }
 
 export default function MovieChain() {
+  const updateStatus = useUpdateStatus();
   const tmdbKey    = useConfigStore(s => s.tmdbKey);
   const embyConfig = useConfigStore(s => s.embyConfig);
   const syncInterval = useConfigStore(s => s.syncInterval);
@@ -377,7 +385,7 @@ export default function MovieChain() {
   // ── All other screens use sidebar layout ──────────────────────────────────
   return (
     <div className="mc-root" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
-      <UpdateBanner />
+      <UpdateBanner {...updateStatus} />
       <Sidebar
         screen={screen} go={go}
         entries={entries} undo={undo} currentLink={currentLink} currentMovie={currentMovie} library={library}
@@ -386,6 +394,7 @@ export default function MovieChain() {
         suggestedSequel={suggestedSequel}
         onCycleSequel={cycleSequel}
         hasMultipleSequels={sequelCandidates.length > 1}
+        updateAvailable={updateStatus.availableDismissed}
       />
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
         {screen === "settings"     && <SettingsScreen go={go} />}

@@ -1,5 +1,4 @@
 import { T } from '../theme.js';
-import { useUpdateStatus } from '../hooks/useUpdateStatus.js';
 
 const PHASE_LABEL = {
   downloading: 'Downloading…',
@@ -26,8 +25,7 @@ const ghostBtn = {
 
 const solidBtn = { ...ghostBtn, background: 'rgba(255,255,255,0.25)', color: '#fff' };
 
-export function UpdateBanner() {
-  const { state, needsReload, dismissReload, triggerUpdate } = useUpdateStatus();
+export function UpdateBanner({ state, needsReload, dismissReload, triggerUpdate, availableDismissed, dismissAvailable }) {
 
   if (needsReload) {
     return (
@@ -45,12 +43,14 @@ export function UpdateBanner() {
   if (!state || state.phase === 'idle' || state.phase === 'error') return null;
 
   if (state.phase === 'available') {
+    if (availableDismissed) return null;
     return (
       <div style={{ ...bannerBase, background: T.accent }}>
         <span style={{ fontWeight: 600 }}>Update available</span>
         <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>{state.label}</span>
-        <div style={{ marginLeft: 'auto' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button style={solidBtn} onClick={triggerUpdate}>Update now</button>
+          <button style={ghostBtn} onClick={dismissAvailable}>Dismiss</button>
         </div>
       </div>
     );
