@@ -331,6 +331,7 @@ export default function MovieChain() {
     el.id = id;
     el.textContent = `
       @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+      body { margin: 0; }
       .mc-root * { box-sizing: border-box; font-family: 'Outfit', system-ui, sans-serif; }
       .mc-root { background: ${T.bg0}; color: ${T.text1}; min-height: 100vh; }
       .mc-root input, .mc-root select, .mc-root textarea {
