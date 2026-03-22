@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, createWriteStream, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, createWriteStream, readFileSync, symlinkSync, rmSync } from 'fs';
 import { readFile, writeFile, rm, cp } from 'fs/promises';
 import { execSync } from 'child_process';
 import { join, dirname } from 'path';
@@ -155,6 +155,8 @@ export async function applyUpdate(channel, broadcast) {
     if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true });
     mkdirSync(tmpDir, { recursive: true });
 
+    let junctionPath = null; // tracked so cleanup can remove it without following it
+
     if (IS_INSTALLER) {
       // ── Installer path: download pre-built zip, extract with PowerShell ──────
       if (!info.windowsZipUrl) throw new Error('No Windows update package found for this release.');
@@ -200,7 +202,10 @@ export async function applyUpdate(channel, broadcast) {
         depsHash(newPkg) === depsHash(oldPkg) && existsSync(join(ROOT, 'node_modules'));
 
       if (canReuseModules) {
-        await cp(join(ROOT, 'node_modules'), join(srcDir, 'node_modules'), { recursive: true });
+        // Junction on Windows, symlink on Linux — instant, no file copying needed
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        junctionPath = join(srcDir, 'node_modules');
+        symlinkSync(join(ROOT, 'node_modules'), junctionPath, linkType);
       } else {
         execSync('npm ci', { cwd: srcDir, stdio: ['ignore', 'pipe', 'pipe'] });
       }
@@ -232,6 +237,7 @@ export async function applyUpdate(channel, broadcast) {
       updatedAt: new Date().toISOString(),
     }));
 
+    if (junctionPath && existsSync(junctionPath)) rmSync(junctionPath);
     await rm(tmpDir, { recursive: true });
 
     setState({ phase: 'restarting' }, broadcast);
@@ -239,7 +245,10 @@ export async function applyUpdate(channel, broadcast) {
     setTimeout(() => process.exit(0), 1500);
   } catch (e) {
     console.error('[updater] apply error:', e.message);
-    try { if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true }); } catch {}
+    try {
+      if (junctionPath && existsSync(junctionPath)) rmSync(junctionPath);
+      if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true });
+    } catch {}
     setState({ phase: 'error', error: e.message }, broadcast);
   }
 }
