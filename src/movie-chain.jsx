@@ -6,6 +6,7 @@ import { useEmbyStore } from "./stores/embyStore.js";
 import { Badge } from "./components/primitives.jsx";
 import { embyImgFor, embyThumbFor } from "./api/emby.js";
 import { store } from "./stores/storage.js";
+import { formatTime } from "./utils.js";
 import { useTmdbPrefetch } from "./hooks/useTmdbPrefetch.js";
 import { useCollectionPrefetch } from "./hooks/useCollectionPrefetch.js";
 import { useUpdateStatus } from "./hooks/useUpdateStatus.js";
@@ -45,6 +46,7 @@ function WidgetThumb({ src, alt, title, year, extra, children }) {
 }
 
 function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library, embyConfig, status, lastSynced, syncLibrary, suggestedSequel, onCycleSequel, hasMultipleSequels, updateAvailable }) {
+  const timeFormat       = useConfigStore(s => s.timeFormat);
   const isChainActive    = ["chain", "search-first", "pick-movie"].includes(screen);
   const isSettingsActive = screen === "settings";
   const isReportsActive  = screen === "reports";
@@ -54,7 +56,7 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
   const lastSyncedDate = lastSynced ? new Date(lastSynced) : null;
   const embyBadge = embyConfig ? {
     syncing:      { label: "Emby syncing…",   color: T.warn },
-    synced:       { label: lastSyncedDate ? lastSyncedDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "synced", color: T.success },
+    synced:       { label: lastSyncedDate ? `Last Emby Sync: ${formatTime(lastSyncedDate, timeFormat)}` : "Emby Synced", color: T.success },
     error:        { label: "Emby error",       color: T.danger },
     disconnected: { label: "Emby off",         color: T.text3 },
   }[status] : null;
@@ -159,8 +161,8 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
         {navItem("Chain",   IconChain,    isChainActive,   () => go("chain"))}
         {navItem("Sequels", IconSequels,  isSequelsActive, () => go("sequels"))}
         {navItem("Reports", IconReports,  isReportsActive, () => go("reports"))}
-        {navItem("System",  IconSystem,   isSystemActive,  () => go("system"), updateAvailable && !isSystemActive)}
         {navItem("Settings",IconSettings, isSettingsActive,() => go("settings"))}
+        {navItem("System",  IconSystem,   isSystemActive,  () => go("system"), updateAvailable && !isSystemActive)}
       </div>
 
       <div style={{ flex: 1 }} />
@@ -343,6 +345,9 @@ export default function MovieChain() {
       }
       .mc-root input:focus, .mc-root select:focus { border-color: ${T.accent} !important; }
       .mc-root input::placeholder { color: ${T.text3} !important; }
+      .mc-root input[type=number]::-webkit-outer-spin-button,
+      .mc-root input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+      .mc-root input[type=number] { -moz-appearance: textfield; }
       .mc-root button {
         background: ${T.bg3}; color: ${T.text1}; border: 1px solid ${T.borderHov};
         border-radius: 6px; padding: 7px 14px; font-size: 13px; font-weight: 500;
@@ -403,7 +408,7 @@ export default function MovieChain() {
         {screen === "pick-movie"   && <PickMovieScreen go={go} />}
         {screen === "reports"      && <ReportsScreen />}
         {screen === "sequels"      && <SequelsScreen />}
-        {screen === "system"       && <SystemScreen />}
+        {screen === "system"       && <SystemScreen updateStatus={updateStatus} />}
         {screen === "chain"        && <ChainScreen error={error} setError={setError} sortOrder={chainSortOrder} setSortOrder={setChainSortOrder} />}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, createWriteStream, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, createWriteStream, readFileSync, symlinkSync, rmSync } from 'fs';
 import { readFile, writeFile, rm, cp } from 'fs/promises';
 import { execSync } from 'child_process';
 import { join, dirname } from 'path';
@@ -7,8 +7,9 @@ import https from 'https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
-const ROOT       = join(__dirname, '..');
-const DATA_DIR   = join(ROOT, 'data');
+const ROOT         = join(__dirname, '..');
+const DATA_DIR     = process.env.MC_DATA_DIR || join(ROOT, 'data');
+const IS_INSTALLER = process.env.MC_INSTALL_TYPE === 'installer';
 const CONFIG_PATH  = join(DATA_DIR, 'server-config.json');
 const CURRENT_PATH = join(DATA_DIR, 'current.json');
 
@@ -31,6 +32,11 @@ export function getCurrentSha()     { return _sha; }
 // ── Config ────────────────────────────────────────────────────────────────────
 const GITHUB_REPO    = 'cragjagged/MovieChain';
 const DEFAULT_CONFIG = { updateChannel: 'stable', checkIntervalHours: 24 };
+
+export function readConfigSync() {
+  try { return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) }; }
+  catch { return { ...DEFAULT_CONFIG }; }
+}
 
 export async function readConfig() {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(await readFile(CONFIG_PATH, 'utf-8')) }; }
@@ -121,11 +127,13 @@ export async function checkForUpdates(channel) {
       if (!data.tag_name) return { available: false };
       const latest = data.tag_name.replace(/^v/, '');
       if (semverGt(latest, getCurrentVersion())) {
+        const zipAsset = data.assets?.find(a => a.name === 'movie-chain-windows.zip');
         return {
           available: true, channel: 'stable',
           version: latest, tag: data.tag_name,
           label: `v${latest}`,
           tarballUrl: data.tarball_url,
+          windowsZipUrl: zipAsset?.browser_download_url ?? null,
         };
       }
       return { available: false };
@@ -147,35 +155,80 @@ export async function applyUpdate(channel, broadcast) {
     if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true });
     mkdirSync(tmpDir, { recursive: true });
 
-    await downloadFile(info.tarballUrl, join(tmpDir, 'update.tar.gz'));
+    let junctionPath = null; // tracked so cleanup can remove it without following it
 
-    setState({ phase: 'extracting' }, broadcast);
-    execSync('tar -xzf update.tar.gz', { cwd: tmpDir });
-    const dirs = readdirSync(tmpDir).filter(e => e !== 'update.tar.gz');
-    if (!dirs.length) throw new Error('Extraction produced no directory');
-    const srcDir = join(tmpDir, dirs[0]);
+    if (IS_INSTALLER) {
+      // ── Installer path: download pre-built zip, extract with PowerShell ──────
+      if (!info.windowsZipUrl) throw new Error('No Windows update package found for this release.');
+      const zipPath       = join(tmpDir, 'update.zip');
+      const extractedDir  = join(tmpDir, 'extracted');
 
-    setState({ phase: 'installing' }, broadcast);
-    execSync('npm ci', { cwd: srcDir, stdio: ['ignore', 'pipe', 'pipe'] });
+      await downloadFile(info.windowsZipUrl, zipPath);
 
-    setState({ phase: 'building' }, broadcast);
-    execSync('npm run build', {
-      cwd: srcDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, NODE_ENV: 'production' },
-    });
+      setState({ phase: 'extracting' }, broadcast);
+      execSync(
+        `powershell -Command "Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${extractedDir}' -Force"`,
+        { stdio: ['ignore', 'pipe', 'pipe'] }
+      );
 
-    setState({ phase: 'applying' }, broadcast);
+      setState({ phase: 'applying' }, broadcast);
+      for (const item of ['dist', 'server', 'node_modules']) {
+        const dest = join(ROOT, item);
+        if (existsSync(dest)) await rm(dest, { recursive: true });
+        await cp(join(extractedDir, item), dest, { recursive: true });
+      }
+      await cp(join(extractedDir, 'package.json'), join(ROOT, 'package.json'));
+    } else {
+      // ── Source/Docker path: download tarball, build from source ──────────────
+      await downloadFile(info.tarballUrl, join(tmpDir, 'update.tar.gz'));
 
-    const distDest = join(ROOT, 'dist');
-    if (existsSync(distDest)) await rm(distDest, { recursive: true });
-    await cp(join(srcDir, 'dist'), distDest, { recursive: true });
+      setState({ phase: 'extracting' }, broadcast);
+      execSync('tar -xzf update.tar.gz', { cwd: tmpDir });
+      const dirs = readdirSync(tmpDir).filter(e => e !== 'update.tar.gz');
+      if (!dirs.length) throw new Error('Extraction produced no directory');
+      const srcDir = join(tmpDir, dirs[0]);
 
-    const serverDest = join(ROOT, 'server');
-    if (existsSync(serverDest)) await rm(serverDest, { recursive: true });
-    await cp(join(srcDir, 'server'), serverDest, { recursive: true });
+      setState({ phase: 'installing' }, broadcast);
 
-    await cp(join(srcDir, 'package.json'), join(ROOT, 'package.json'));
+      // Reuse existing node_modules when dependencies haven't changed — avoids
+      // a full npm ci (network + disk) on the majority of updates.
+      const newPkg = JSON.parse(await readFile(join(srcDir, 'package.json'), 'utf-8'));
+      const oldPkg = (() => {
+        try { return JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')); }
+        catch { return {}; }
+      })();
+      const depsHash = p => JSON.stringify([p.dependencies || {}, p.devDependencies || {}]);
+      const canReuseModules =
+        depsHash(newPkg) === depsHash(oldPkg) && existsSync(join(ROOT, 'node_modules'));
+
+      if (canReuseModules) {
+        // Junction on Windows, symlink on Linux — instant, no file copying needed
+        const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+        junctionPath = join(srcDir, 'node_modules');
+        symlinkSync(join(ROOT, 'node_modules'), junctionPath, linkType);
+      } else {
+        execSync('npm ci', { cwd: srcDir, stdio: ['ignore', 'pipe', 'pipe'] });
+      }
+
+      setState({ phase: 'building' }, broadcast);
+      execSync('npm run build', {
+        cwd: srcDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'production' },
+      });
+
+      setState({ phase: 'applying' }, broadcast);
+
+      const distDest = join(ROOT, 'dist');
+      if (existsSync(distDest)) await rm(distDest, { recursive: true });
+      await cp(join(srcDir, 'dist'), distDest, { recursive: true });
+
+      const serverDest = join(ROOT, 'server');
+      if (existsSync(serverDest)) await rm(serverDest, { recursive: true });
+      await cp(join(srcDir, 'server'), serverDest, { recursive: true });
+
+      await cp(join(srcDir, 'package.json'), join(ROOT, 'package.json'));
+    }
 
     if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
     await writeFile(CURRENT_PATH, JSON.stringify({
@@ -184,6 +237,7 @@ export async function applyUpdate(channel, broadcast) {
       updatedAt: new Date().toISOString(),
     }));
 
+    if (junctionPath && existsSync(junctionPath)) rmSync(junctionPath);
     await rm(tmpDir, { recursive: true });
 
     setState({ phase: 'restarting' }, broadcast);
@@ -191,7 +245,10 @@ export async function applyUpdate(channel, broadcast) {
     setTimeout(() => process.exit(0), 1500);
   } catch (e) {
     console.error('[updater] apply error:', e.message);
-    try { if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true }); } catch {}
+    try {
+      if (junctionPath && existsSync(junctionPath)) rmSync(junctionPath);
+      if (existsSync(tmpDir)) await rm(tmpDir, { recursive: true });
+    } catch {}
     setState({ phase: 'error', error: e.message }, broadcast);
   }
 }

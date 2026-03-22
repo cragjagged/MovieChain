@@ -1,13 +1,15 @@
 import { T } from "../theme.js";
+import { STATE_VERSION } from "../constants.js";
 import { useConfigStore } from "../stores/configStore.js";
 import { useChainStore } from "../stores/chainStore.js";
 import { useEmbyStore } from "../stores/embyStore.js";
 import { ErrBanner } from "../components/banners.jsx";
 import { SectionLabel, StatusPill } from "../components/primitives.jsx";
 import { useState } from "react";
+import { formatTime } from "../utils.js";
 
 export function SettingsScreen({ go }) {
-  const { tmdbKey, embyConfig, setEmbyConfig, syncInterval, setSyncInterval } = useConfigStore();
+  const { tmdbKey, embyConfig, setEmbyConfig, syncInterval, setSyncInterval, timeFormat, setTimeFormat } = useConfigStore();
   const { entries, clear: clearChain, importChain } = useChainStore();
   const { library, status, lastSynced, syncLibrary, clearLibrary } = useEmbyStore();
   const [error, setError] = useState("");
@@ -31,7 +33,7 @@ export function SettingsScreen({ go }) {
       const storage = Object.fromEntries(
         Object.entries(all).filter(([k]) => !k.startsWith('mc:tmdblinks:'))
       );
-      const payload = JSON.stringify({ version: 1, type: "full-backup", exportedAt: new Date().toISOString(), storage }, null, 2);
+      const payload = JSON.stringify({ version: 1, stateVersion: STATE_VERSION, type: "full-backup", exportedAt: new Date().toISOString(), storage }, null, 2);
       download(payload, `movie-chain-backup-${today()}.json`);
     } catch (e) { setError("Export failed: " + (e?.message || e)); }
   };
@@ -45,7 +47,14 @@ export function SettingsScreen({ go }) {
         const data = JSON.parse(ev.target.result);
 
         if (data.type === "full-backup" && data.storage) {
-          if (!window.confirm("Restore full backup? This will replace your current settings, chain, and Emby library, then reload the app.")) return;
+          const backupVersion = data.stateVersion ?? 1;
+          if (backupVersion > STATE_VERSION) {
+            throw new Error(`Backup is state version ${backupVersion} but this app only supports up to version ${STATE_VERSION} — update the app before restoring this backup.`);
+          }
+          const migrationNote = backupVersion < STATE_VERSION
+            ? ` The backup will be automatically migrated from state version ${backupVersion} to ${STATE_VERSION}.`
+            : '';
+          if (!window.confirm(`Restore full backup? This will replace your current settings, chain, and Emby library, then reload the app.${migrationNote}`)) return;
           await writeStorage(data.storage);
           window.location.reload();
           return;
@@ -76,7 +85,7 @@ export function SettingsScreen({ go }) {
           <StatusPill variant="success">Connected</StatusPill>
         </div>
         <p style={{ fontSize: 12, color: T.text2, margin: "0 0 10px" }}>Key ending …{tmdbKey.slice(-6)}</p>
-        <button onClick={() => go("setup")} className="ghost" style={{ fontSize: 12 }}>Change key</button>
+        <button onClick={() => go("setup")} style={{ fontSize: 12 }}>Change key</button>
       </div>
 
       {/* Emby */}
@@ -105,18 +114,18 @@ export function SettingsScreen({ go }) {
                 ))}
               </select>
               <span style={{ fontSize: 12, color: T.text2 }}>
-                {lastSyncedDate ? `· last synced ${lastSyncedDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "· not yet synced"}
+                {lastSyncedDate ? `· last synced ${formatTime(lastSyncedDate, timeFormat)}` : "· not yet synced"}
               </span>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => syncLibrary(embyConfig, false)} disabled={status === "syncing"} className="ghost" style={{ fontSize: 12 }}>
+              <button onClick={() => syncLibrary(embyConfig, false)} disabled={status === "syncing"} style={{ fontSize: 12 }}>
                 {status === "syncing" ? "Syncing…" : "Sync now"}
               </button>
-              <button onClick={handleDisconnectEmby} className="ghost danger" style={{ fontSize: 12 }}>Disconnect</button>
+              <button onClick={handleDisconnectEmby} className="danger" style={{ fontSize: 12 }}>Disconnect</button>
             </div>
           </>
         ) : (
-          <button onClick={() => go("setup")} className="ghost" style={{ fontSize: 12 }}>Connect Emby →</button>
+          <button onClick={() => go("setup")} style={{ fontSize: 12 }}>Connect Emby →</button>
         )}
       </div>
 
@@ -127,6 +136,22 @@ export function SettingsScreen({ go }) {
         <button onClick={() => { if (window.confirm("Clear the entire chain?")) { clearChain(); go("chain"); } }} className="danger" style={{ fontSize: 12 }}>
           Clear chain
         </button>
+      </div>
+
+      {/* Display */}
+      <div style={{ padding: "14px 16px", marginBottom: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
+        <SectionLabel>Display</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Time format</label>
+          <select
+            value={timeFormat}
+            onChange={e => setTimeFormat(e.target.value)}
+            style={{ fontSize: 12, padding: "4px 8px" }}
+          >
+            <option value="24h">24-hour (14:30)</option>
+            <option value="12h">12-hour (02:30 PM)</option>
+          </select>
+        </div>
       </div>
 
       {/* Backup */}
@@ -142,7 +167,7 @@ export function SettingsScreen({ go }) {
           <button onClick={handleExportFull} className="primary" style={{ fontSize: 12 }}>
             Export full backup
           </button>
-          <button onClick={handleExportChain} disabled={entries.length === 0} className="ghost" style={{ fontSize: 12 }}>
+          <button onClick={handleExportChain} disabled={entries.length === 0} style={{ fontSize: 12 }}>
             Export chain
           </button>
         </div>
@@ -182,9 +207,10 @@ function FileInputLabel({ onChange, children }) {
   return (
     <label style={{
       fontSize: 12, cursor: "pointer", padding: "7px 14px",
-      border: `1px solid rgba(255,255,255,0.14)`, borderRadius: 6,
-      background: "rgba(255,255,255,0.05)", color: "inherit", fontFamily: "inherit",
+      border: `1px solid ${T.borderHov}`, borderRadius: 6,
+      background: T.bg3, color: T.text1, fontFamily: "inherit",
       fontWeight: 500, display: "inline-flex", alignItems: "center",
+      transition: "background 0.15s, border-color 0.15s",
     }}>
       {children}
       <input type="file" accept=".json" onChange={onChange} style={{ display: "none" }} />

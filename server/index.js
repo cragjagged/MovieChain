@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import {
-  readConfig, updateConfig, getUpdateState,
+  readConfig, readConfigSync, updateConfig, getUpdateState,
   checkForUpdates, applyUpdate, startChecker,
   getCurrentVersion, getCurrentSha,
 } from './updater.js';
@@ -13,11 +13,11 @@ import { dbGet, dbSet, dbDelete, dbAll } from './db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const ROOT       = join(__dirname, '..');
-const DATA_DIR   = join(ROOT, 'data');
+const DATA_DIR   = process.env.MC_DATA_DIR || join(ROOT, 'data');
 
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
-const PORT = parseInt(process.env.PORT || '7879', 10);
+const PORT = parseInt(String(readConfigSync().port || process.env.PORT || 7879), 10);
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));
@@ -37,7 +37,13 @@ function broadcast(data) {
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 app.get('/api/version', (_req, res) => {
-  res.json({ version: getCurrentVersion(), sha: getCurrentSha() });
+  res.json({
+    version:      getCurrentVersion(),
+    sha:          getCurrentSha(),
+    installType:  process.env.MC_INSTALL_TYPE || 'source',
+    port:         PORT,
+    portFromEnv:  !!process.env.PORT && !readConfigSync().port,
+  });
 });
 
 app.get('/api/update/config', async (_req, res) => {

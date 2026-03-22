@@ -18,21 +18,25 @@ Connects to [TMDB](https://www.themoviedb.org/) for film and credit data, and op
 
 ## Getting started
 
-### What you'll need
+You'll need a free [TMDB API key](https://www.themoviedb.org/settings/api) regardless of how you install. An [Emby](https://emby.media/) server is optional — it enables watch tracking.
 
-- A free [TMDB API key](https://www.themoviedb.org/settings/api)
-- Docker (recommended), or Node.js 22+ for a bare-metal install
-- An [Emby](https://emby.media/) server (optional — enables watch tracking)
+### Windows installer (easiest)
 
-### Docker (recommended)
+1. Download `MovieChain-Setup-x.x.x.exe` from the [latest release](https://github.com/cragjagged/MovieChain/releases/latest)
+2. Run it and follow the prompts — it installs Movie Chain as a Windows service
+3. Open `http://localhost:7879` in your browser (or whichever port you chose in the Advanced Options step)
+
+Movie Chain will start automatically on boot and update itself in the background. The installer requires Windows 10 64-bit or later.
+
+An **Advanced Options** page in the installer lets you change the port (default `7879`), the install directory, and the data directory (default `C:\ProgramData\MovieChain`) if needed.
+
+### Docker
 
 ```bash
 docker compose up -d
 ```
 
-Then open [http://localhost:7879](http://localhost:7879) in your browser. A setup wizard will walk you through the rest.
-
-To use a different port, set `PORT` in `docker-compose.yml`:
+Then open [http://localhost:7879](http://localhost:7879). To use a different port, update `docker-compose.yml`:
 
 ```yaml
 environment:
@@ -41,19 +45,87 @@ ports:
   - "8080:8080"
 ```
 
-### Bare metal
+### Linux / macOS
+
+Docker is the easiest path on Linux and macOS — see above. If you'd rather run it directly, you'll need [Node.js 22+](https://nodejs.org/).
+
+#### Clone and build
 
 ```bash
+git clone https://github.com/cragjagged/MovieChain.git
+cd MovieChain
 npm run serve    # builds the app and starts the server at http://localhost:7879
 ```
 
-For automatic restarts (e.g. after an auto-update), run via [PM2](https://pm2.keymetrics.io/):
+#### Run as a service
+
+**Linux (systemd)** — create `/etc/systemd/system/movie-chain.service`:
+
+```ini
+[Unit]
+Description=Movie Chain
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/MovieChain
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and start it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now movie-chain
+```
+
+**macOS / cross-platform** — use [PM2](https://pm2.keymetrics.io/):
 
 ```bash
 npm install -g pm2
 pm2 start ecosystem.config.cjs
 pm2 save && pm2 startup
 ```
+
+### Windows (manual / power user)
+
+The installer above handles all of this automatically — use this if you prefer full control. You'll need [Node.js 22+](https://nodejs.org/) and [NSSM](https://nssm.cc/download) if you want to run as a service.
+
+#### Clone and start
+
+```powershell
+git clone https://github.com/cragjagged/MovieChain.git
+cd MovieChain
+npm run serve    # builds the app and starts the server at http://localhost:7879
+```
+
+#### Run as a Windows service (NSSM)
+
+Run the following in an elevated PowerShell prompt, adjusting the path to wherever you cloned the repo:
+
+```powershell
+$app = "C:\MovieChain"
+$node = (Get-Command node).Source
+
+$data = "C:\ProgramData\MovieChain"   # change if you want data elsewhere
+
+nssm install MovieChain $node
+nssm set MovieChain AppParameters "$app\server\index.js"
+nssm set MovieChain AppDirectory $app
+nssm set MovieChain AppEnvironmentExtra "MC_DATA_DIR=$data" "PORT=7879"
+nssm set MovieChain Start SERVICE_AUTO_START
+nssm set MovieChain DisplayName "Movie Chain"
+
+New-Item -ItemType Directory -Force $data | Out-Null
+Start-Service MovieChain
+```
+
+Movie Chain will now start automatically on boot. Logs are written to the console — use `nssm set MovieChain AppStdout <path>` if you need persistent log files.
 
 ---
 
@@ -73,7 +145,7 @@ You can update any of these settings later from the **Settings** screen.
 
 Movie Chain can update itself automatically. Go to the **System** screen to configure it:
 
-- **Channel** — *Stable* tracks releases; *Development* tracks the latest commits on the develop branch
+- **Channel** — *Stable* tracks releases; *Development* tracks the latest commits on the develop branch (not available for Windows installer installs)
 - **Check interval** — how often to look for updates (default: 24 hours)
 
 When an update is found, a banner appears at the top of the screen. You can install it immediately or dismiss the banner and come back to it later — a dot on the System nav item will remind you it's waiting.

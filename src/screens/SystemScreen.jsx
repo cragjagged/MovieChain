@@ -1,18 +1,42 @@
 import { useState, useEffect } from "react";
 import { T } from "../theme.js";
 import { useConfigStore } from "../stores/configStore.js";
+import { formatTime } from "../utils.js";
 import { Badge } from "../components/primitives.jsx";
 import { ALL_TYPES } from "../constants.js";
-import { useUpdateStatus } from "../hooks/useUpdateStatus.js";
-
 const IS_DEV = import.meta.env.DEV;
 
-export function SystemScreen() {
+export function SystemScreen({ updateStatus }) {
   const embyConfig = useConfigStore(s => s.embyConfig);
-  const { state, triggerCheck, triggerUpdate, lastChecked } = useUpdateStatus();
+  const timeFormat = useConfigStore(s => s.timeFormat);
+  const { state, triggerCheck, triggerUpdate, lastChecked } = updateStatus;
 
-  const [cfg, setCfg]         = useState(null);
+  const handleChannelChange = async (e) => {
+    const next = e.target.value;
+    const prev = cfg.updateChannel;
+    if (next === prev) return;
+
+    if (next === 'stable' && prev === 'develop') {
+      window.alert(
+        'Switching from develop to stable is not supported — your data may be incompatible with the stable release. Staying on develop.'
+      );
+      return; // controlled select reverts automatically
+    }
+
+    if (next === 'develop' && prev === 'stable') {
+      const ok = window.confirm(
+        'Switch to the develop channel? This cannot be undone — once your data has been updated by a develop build it may be incompatible with stable releases.'
+      );
+      if (!ok) return;
+    }
+
+    await saveCfg({ updateChannel: next });
+    triggerCheck();
+  };
+
+  const [cfg, setCfg]           = useState(null);
   const [serverVersion, setServerVersion] = useState(null);
+  const [portChanged, setPortChanged] = useState(false);
 
   useEffect(() => {
     if (IS_DEV) return;
@@ -39,11 +63,18 @@ export function SystemScreen() {
       {/* Version */}
       <div style={{ marginBottom: 12, padding: "12px 16px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
         <div style={{ color: T.text2, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 10, marginBottom: 6 }}>Version</div>
-        <div style={{ fontSize: 13, color: T.text1 }}>
-          Movie Chain&nbsp;
-          <span style={{ color: T.accent, fontWeight: 600 }}>
-            v{serverVersion?.version ?? __APP_VERSION__}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, color: T.text1 }}>
+            Movie Chain&nbsp;
+            <span style={{ color: T.accent, fontWeight: 600 }}>
+              v{serverVersion?.version ?? __APP_VERSION__}
+            </span>
           </span>
+          {serverVersion?.installType === 'installer' && (
+            <span style={{ fontSize: 10, color: T.text3, background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 4, padding: "1px 6px", fontWeight: 500 }}>
+              Windows Installer
+            </span>
+          )}
         </div>
         {(serverVersion?.sha ?? __GIT_SHA__) !== 'unknown' && (
           <div style={{ fontSize: 11, color: T.text3, marginTop: 2, fontFamily: "monospace" }}>
@@ -65,21 +96,19 @@ export function SystemScreen() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-            {/* Channel */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Channel</label>
-              <select
-                value={cfg.updateChannel}
-                onChange={e => saveCfg({ updateChannel: e.target.value })}
-                style={{ fontSize: 12, padding: "4px 8px" }}
-              >
-                <option value="stable">Stable (releases)</option>
-                <option value="develop">Development (develop branch)</option>
-              </select>
-            </div>
-
-            {/* Interval */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Channel + Interval — grid keeps dropdowns column-aligned */}
+            <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "8px 10px", alignItems: "center", justifyContent: "start" }}>
+              {serverVersion?.installType !== 'installer' && <>
+                <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Channel</label>
+                <select
+                  value={cfg.updateChannel}
+                  onChange={handleChannelChange}
+                  style={{ fontSize: 12, padding: "4px 8px" }}
+                >
+                  <option value="stable">Stable (releases)</option>
+                  <option value="develop">Development (develop branch)</option>
+                </select>
+              </>}
               <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Check every</label>
               <select
                 value={cfg.checkIntervalHours}
@@ -115,14 +144,13 @@ export function SystemScreen() {
                 <>
                   <button
                     onClick={triggerCheck}
-                    className="ghost"
                     style={{ fontSize: 12 }}
                   >
                     Check now
                   </button>
                   {lastChecked && !lastChecked.available && (
                     <span style={{ fontSize: 12, color: T.success }}>
-                      Up to date · checked {lastChecked.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      Up to date · checked {formatTime(lastChecked.at, timeFormat)}
                     </span>
                   )}
                 </>
@@ -135,6 +163,36 @@ export function SystemScreen() {
           </div>
         )}
       </div>
+
+      {/* Server */}
+      {!IS_DEV && serverVersion && (
+        <div style={{ marginBottom: 12, padding: "14px 16px", background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
+          <div style={{ color: T.text2, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 10, marginBottom: 10 }}>Server</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Port</label>
+            <input
+              type="number"
+              min={1}
+              max={65535}
+              value={cfg?.port ?? serverVersion.port ?? 7879}
+              onChange={e => setCfg(c => ({ ...c, port: Number(e.target.value) }))}
+              onBlur={async e => {
+                const port = Number(e.target.value);
+                if (port < 1 || port > 65535) return;
+                await saveCfg({ port });
+                setPortChanged(true);
+              }}
+              disabled={serverVersion.portFromEnv}
+              style={{ fontSize: 12, padding: "4px 8px", width: 80, opacity: serverVersion.portFromEnv ? 0.5 : 1 }}
+            />
+            {serverVersion.portFromEnv ? (
+              <span style={{ fontSize: 12, color: T.text3 }}>Set via PORT environment variable</span>
+            ) : portChanged && (
+              <span style={{ fontSize: 12, color: T.text3 }}>Restart the server to apply</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Chain Rules */}
       <div style={{ marginBottom: 12, padding: "10px 14px", background: T.bg1, border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 13, color: T.text2, lineHeight: 1.7 }}>
