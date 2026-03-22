@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import {
-  readConfig, updateConfig, getUpdateState,
+  readConfig, readConfigSync, updateConfig, getUpdateState,
   checkForUpdates, applyUpdate, startChecker,
   getCurrentVersion, getCurrentSha,
 } from './updater.js';
@@ -17,7 +17,7 @@ const DATA_DIR   = join(ROOT, 'data');
 
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
-const PORT = parseInt(process.env.PORT || '7879', 10);
+const PORT = parseInt(process.env.PORT || String(readConfigSync().port || 7879), 10);
 
 const app = express();
 app.use(express.json({ limit: '20mb' }));

@@ -5,13 +5,36 @@ import { useChainStore } from "../stores/chainStore.js";
 import { useEmbyStore } from "../stores/embyStore.js";
 import { ErrBanner } from "../components/banners.jsx";
 import { SectionLabel, StatusPill } from "../components/primitives.jsx";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function SettingsScreen({ go }) {
   const { tmdbKey, embyConfig, setEmbyConfig, syncInterval, setSyncInterval } = useConfigStore();
   const { entries, clear: clearChain, importChain } = useChainStore();
   const { library, status, lastSynced, syncLibrary, clearLibrary } = useEmbyStore();
   const [error, setError] = useState("");
+  const [serverCfg, setServerCfg] = useState(null);
+  const [portInput, setPortInput] = useState("");
+  const [portSaved, setPortSaved] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/update/config').then(r => r.json()).then(cfg => {
+      setServerCfg(cfg);
+      setPortInput(String(cfg.port ?? 7879));
+    }).catch(() => {});
+  }, []);
+
+  const handleSavePort = async () => {
+    const port = parseInt(portInput, 10);
+    if (isNaN(port) || port < 1 || port > 65535) { setError("Invalid port number (1–65535)."); return; }
+    await fetch('/api/update/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ port }),
+    }).catch(() => {});
+    setServerCfg(c => ({ ...c, port }));
+    setPortSaved(true);
+    setTimeout(() => setPortSaved(false), 3000);
+  };
 
   const handleDisconnectEmby = () => {
     setEmbyConfig(null);
@@ -135,6 +158,23 @@ export function SettingsScreen({ go }) {
         <button onClick={() => { if (window.confirm("Clear the entire chain?")) { clearChain(); go("chain"); } }} className="danger" style={{ fontSize: 12 }}>
           Clear chain
         </button>
+      </div>
+
+      {/* Server */}
+      <div style={{ padding: "14px 16px", marginBottom: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
+        <SectionLabel>Server</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: serverCfg ? 8 : 0 }}>
+          <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Port</label>
+          <input
+            type="number"
+            min={1} max={65535}
+            value={portInput}
+            onChange={e => { setPortInput(e.target.value); setPortSaved(false); }}
+            style={{ width: 80, fontSize: 12, padding: "4px 8px", borderRadius: 6, border: `1px solid ${T.borderHov}`, background: T.bg2, color: T.text1 }}
+          />
+          <button onClick={handleSavePort} className="ghost" style={{ fontSize: 12 }}>Save</button>
+          {portSaved && <span style={{ fontSize: 12, color: T.success }}>Saved — restart to apply</span>}
+        </div>
       </div>
 
       {/* Backup */}
