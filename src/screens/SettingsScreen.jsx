@@ -84,7 +84,7 @@ export function SettingsScreen({ go }) {
           <StatusPill variant="success">Connected</StatusPill>
         </div>
         <p style={{ fontSize: 12, color: T.text2, margin: "0 0 10px" }}>Key ending …{tmdbKey.slice(-6)}</p>
-        <button onClick={() => go("setup")} className="ghost" style={{ fontSize: 12 }}>Change key</button>
+        <button onClick={() => go("setup")} style={{ fontSize: 12 }}>Change key</button>
       </div>
 
       {/* Emby */}
@@ -117,14 +117,14 @@ export function SettingsScreen({ go }) {
               </span>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => syncLibrary(embyConfig, false)} disabled={status === "syncing"} className="ghost" style={{ fontSize: 12 }}>
+              <button onClick={() => syncLibrary(embyConfig, false)} disabled={status === "syncing"} style={{ fontSize: 12 }}>
                 {status === "syncing" ? "Syncing…" : "Sync now"}
               </button>
-              <button onClick={handleDisconnectEmby} className="ghost danger" style={{ fontSize: 12 }}>Disconnect</button>
+              <button onClick={handleDisconnectEmby} className="danger" style={{ fontSize: 12 }}>Disconnect</button>
             </div>
           </>
         ) : (
-          <button onClick={() => go("setup")} className="ghost" style={{ fontSize: 12 }}>Connect Emby →</button>
+          <button onClick={() => go("setup")} style={{ fontSize: 12 }}>Connect Emby →</button>
         )}
       </div>
 
@@ -150,7 +150,7 @@ export function SettingsScreen({ go }) {
           <button onClick={handleExportFull} className="primary" style={{ fontSize: 12 }}>
             Export full backup
           </button>
-          <button onClick={handleExportChain} disabled={entries.length === 0} className="ghost" style={{ fontSize: 12 }}>
+          <button onClick={handleExportChain} disabled={entries.length === 0} style={{ fontSize: 12 }}>
             Export chain
           </button>
         </div>
@@ -190,9 +190,10 @@ function FileInputLabel({ onChange, children }) {
   return (
     <label style={{
       fontSize: 12, cursor: "pointer", padding: "7px 14px",
-      border: `1px solid rgba(255,255,255,0.14)`, borderRadius: 6,
-      background: "rgba(255,255,255,0.05)", color: "inherit", fontFamily: "inherit",
+      border: `1px solid ${T.borderHov}`, borderRadius: 6,
+      background: T.bg3, color: T.text1, fontFamily: "inherit",
       fontWeight: 500, display: "inline-flex", alignItems: "center",
+      transition: "background 0.15s, border-color 0.15s",
     }}>
       {children}
       <input type="file" accept=".json" onChange={onChange} style={{ display: "none" }} />

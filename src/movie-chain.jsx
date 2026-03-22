@@ -159,8 +159,8 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
         {navItem("Chain",   IconChain,    isChainActive,   () => go("chain"))}
         {navItem("Sequels", IconSequels,  isSequelsActive, () => go("sequels"))}
         {navItem("Reports", IconReports,  isReportsActive, () => go("reports"))}
-        {navItem("System",  IconSystem,   isSystemActive,  () => go("system"), updateAvailable && !isSystemActive)}
         {navItem("Settings",IconSettings, isSettingsActive,() => go("settings"))}
+        {navItem("System",  IconSystem,   isSystemActive,  () => go("system"), updateAvailable && !isSystemActive)}
       </div>
 
       <div style={{ flex: 1 }} />

@@ -94,9 +94,9 @@ export function SystemScreen({ updateStatus }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 
-            {/* Channel — develop option hidden for installer installs */}
-            {serverVersion?.installType !== 'installer' && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Channel + Interval — grid keeps dropdowns column-aligned */}
+            <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "8px 10px", alignItems: "center", justifyContent: "start" }}>
+              {serverVersion?.installType !== 'installer' && <>
                 <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Channel</label>
                 <select
                   value={cfg.updateChannel}
@@ -106,11 +106,7 @@ export function SystemScreen({ updateStatus }) {
                   <option value="stable">Stable (releases)</option>
                   <option value="develop">Development (develop branch)</option>
                 </select>
-              </div>
-            )}
-
-            {/* Interval */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              </>}
               <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Check every</label>
               <select
                 value={cfg.checkIntervalHours}
@@ -146,7 +142,6 @@ export function SystemScreen({ updateStatus }) {
                 <>
                   <button
                     onClick={triggerCheck}
-                    className="ghost"
                     style={{ fontSize: 12 }}
                   >
                     Check now
