@@ -33,6 +33,14 @@ export function useUpdateStatus() {
     return () => { clearTimeout(reconnectTimer); es?.close(); };
   }, []);
 
+  const [lastChecked, setLastChecked]   = useState(null);
+  const [manualSource, setManualSource] = useState(false);
+
+  // Reset manualSource once the update moves out of the available phase
+  useEffect(() => {
+    if (serverState?.phase !== 'available') setManualSource(false);
+  }, [serverState?.phase]);
+
   const availableDismissed = dismissedLabel !== null &&
     serverState?.phase === 'available' &&
     serverState.label === dismissedLabel;
@@ -40,9 +48,17 @@ export function useUpdateStatus() {
   return {
     state:             serverState,
     needsReload,
+    lastChecked,
+    manualSource,
     dismissReload:     () => setNeedsReload(false),
     triggerUpdate:     () => fetch('/api/update/apply', { method: 'POST' }).catch(() => {}),
-    triggerCheck:      () => fetch('/api/update/check', { method: 'POST' }).catch(() => {}),
+    triggerCheck:      () => fetch('/api/update/check', { method: 'POST' })
+      .then(r => r.json())
+      .then(result => {
+        setLastChecked({ at: new Date(), available: result.available });
+        if (result.available) setManualSource(true);
+      })
+      .catch(() => {}),
     availableDismissed,
     dismissAvailable:  () => setDismissedLabel(serverState?.label ?? ''),
   };

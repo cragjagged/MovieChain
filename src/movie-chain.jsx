@@ -395,7 +395,7 @@ export default function MovieChain() {
         suggestedSequel={suggestedSequel}
         onCycleSequel={cycleSequel}
         hasMultipleSequels={sequelCandidates.length > 1}
-        updateAvailable={updateStatus.availableDismissed}
+        updateAvailable={updateStatus.availableDismissed || updateStatus.manualSource}
       />
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
         {screen === "settings"     && <SettingsScreen go={go} />}

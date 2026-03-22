@@ -25,7 +25,7 @@ const ghostBtn = {
 
 const solidBtn = { ...ghostBtn, background: 'rgba(255,255,255,0.25)', color: '#fff' };
 
-export function UpdateBanner({ state, needsReload, dismissReload, triggerUpdate, availableDismissed, dismissAvailable }) {
+export function UpdateBanner({ state, needsReload, dismissReload, triggerUpdate, availableDismissed, dismissAvailable, manualSource }) {
 
   if (needsReload) {
     return (
@@ -43,7 +43,7 @@ export function UpdateBanner({ state, needsReload, dismissReload, triggerUpdate,
   if (!state || state.phase === 'idle' || state.phase === 'error') return null;
 
   if (state.phase === 'available') {
-    if (availableDismissed) return null;
+    if (availableDismissed || manualSource) return null;
     return (
       <div style={{ ...bannerBase, background: T.accent }}>
         <span style={{ fontWeight: 600 }}>Update available</span>

@@ -9,7 +9,7 @@ const IS_DEV = import.meta.env.DEV;
 
 export function SystemScreen() {
   const embyConfig = useConfigStore(s => s.embyConfig);
-  const { state, triggerCheck, triggerUpdate } = useUpdateStatus();
+  const { state, triggerCheck, triggerUpdate, lastChecked } = useUpdateStatus();
 
   const [cfg, setCfg]         = useState(null);
   const [serverVersion, setServerVersion] = useState(null);
@@ -112,13 +112,20 @@ export function SystemScreen() {
               ) : isUpdating ? (
                 <span style={{ fontSize: 12, color: T.text2 }}>Updating…</span>
               ) : (
-                <button
-                  onClick={triggerCheck}
-                  className="ghost"
-                  style={{ fontSize: 12 }}
-                >
-                  Check now
-                </button>
+                <>
+                  <button
+                    onClick={triggerCheck}
+                    className="ghost"
+                    style={{ fontSize: 12 }}
+                  >
+                    Check now
+                  </button>
+                  {lastChecked && !lastChecked.available && (
+                    <span style={{ fontSize: 12, color: T.success }}>
+                      Up to date · checked {lastChecked.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </>
               )}
               {state?.phase === 'error' && (
                 <span style={{ fontSize: 12, color: T.danger }}>Error: {state.error}</span>
