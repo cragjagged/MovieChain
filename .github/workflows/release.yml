@@ -46,12 +46,12 @@ jobs:
           Get-ChildItem "node-portable\node-v${version}-win-x64" |
             Copy-Item -Destination "installer\node" -Recurse -Force
 
-      - name: Download NSSM
+      - name: Install NSSM
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile "nssm.zip" -UseBasicParsing
-          Expand-Archive -Path "nssm.zip" -DestinationPath "nssm-extracted"
-          Copy-Item "nssm-extracted\nssm-2.24\win64\nssm.exe" "installer\nssm.exe"
+          choco install nssm -y --no-progress
+          Copy-Item "C:\ProgramData\chocolatey\lib\NSSM\tools\win64\nssm.exe" "installer\nssm.exe"
+          & "installer\nssm.exe" version
 
       - name: Build installer with Inno Setup
         shell: pwsh
