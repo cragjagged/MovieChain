@@ -187,7 +187,23 @@ export async function applyUpdate(channel, broadcast) {
       const srcDir = join(tmpDir, dirs[0]);
 
       setState({ phase: 'installing' }, broadcast);
-      execSync('npm ci', { cwd: srcDir, stdio: ['ignore', 'pipe', 'pipe'] });
+
+      // Reuse existing node_modules when dependencies haven't changed — avoids
+      // a full npm ci (network + disk) on the majority of updates.
+      const newPkg = JSON.parse(await readFile(join(srcDir, 'package.json'), 'utf-8'));
+      const oldPkg = (() => {
+        try { return JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')); }
+        catch { return {}; }
+      })();
+      const depsHash = p => JSON.stringify([p.dependencies || {}, p.devDependencies || {}]);
+      const canReuseModules =
+        depsHash(newPkg) === depsHash(oldPkg) && existsSync(join(ROOT, 'node_modules'));
+
+      if (canReuseModules) {
+        await cp(join(ROOT, 'node_modules'), join(srcDir, 'node_modules'), { recursive: true });
+      } else {
+        execSync('npm ci', { cwd: srcDir, stdio: ['ignore', 'pipe', 'pipe'] });
+      }
 
       setState({ phase: 'building' }, broadcast);
       execSync('npm run build', {
