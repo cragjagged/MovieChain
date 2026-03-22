@@ -30,7 +30,7 @@ export function getCurrentSha()     { return _sha; }
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const GITHUB_REPO    = 'cragjagged/MovieChain';
-const DEFAULT_CONFIG = { updateChannel: 'stable', checkIntervalHours: 1 };
+const DEFAULT_CONFIG = { updateChannel: 'stable', checkIntervalHours: 24 };
 
 export async function readConfig() {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(await readFile(CONFIG_PATH, 'utf-8')) }; }
