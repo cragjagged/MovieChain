@@ -25,4 +25,13 @@ export function sortOptions(options, sortBy, library) {
   return arr;
 }
 
+// Formats a Date to HH:MM using the app's time format setting.
+// timeFormat: "24h" → "14:30", "12h" → "02:30 PM"
+export function formatTime(date, timeFormat) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit", minute: "2-digit",
+    hour12: timeFormat === "12h",
+  });
+}
+
 export { SORT_OPTIONS };

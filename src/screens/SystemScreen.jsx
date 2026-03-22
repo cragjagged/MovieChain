@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { T } from "../theme.js";
 import { useConfigStore } from "../stores/configStore.js";
+import { formatTime } from "../utils.js";
 import { Badge } from "../components/primitives.jsx";
 import { ALL_TYPES } from "../constants.js";
 const IS_DEV = import.meta.env.DEV;
 
 export function SystemScreen({ updateStatus }) {
   const embyConfig = useConfigStore(s => s.embyConfig);
+  const timeFormat = useConfigStore(s => s.timeFormat);
   const { state, triggerCheck, triggerUpdate, lastChecked } = updateStatus;
 
   const handleChannelChange = async (e) => {
@@ -148,7 +150,7 @@ export function SystemScreen({ updateStatus }) {
                   </button>
                   {lastChecked && !lastChecked.available && (
                     <span style={{ fontSize: 12, color: T.success }}>
-                      Up to date · checked {lastChecked.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      Up to date · checked {formatTime(lastChecked.at, timeFormat)}
                     </span>
                   )}
                 </>

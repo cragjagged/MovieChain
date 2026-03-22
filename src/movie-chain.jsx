@@ -6,6 +6,7 @@ import { useEmbyStore } from "./stores/embyStore.js";
 import { Badge } from "./components/primitives.jsx";
 import { embyImgFor, embyThumbFor } from "./api/emby.js";
 import { store } from "./stores/storage.js";
+import { formatTime } from "./utils.js";
 import { useTmdbPrefetch } from "./hooks/useTmdbPrefetch.js";
 import { useCollectionPrefetch } from "./hooks/useCollectionPrefetch.js";
 import { useUpdateStatus } from "./hooks/useUpdateStatus.js";
@@ -45,6 +46,7 @@ function WidgetThumb({ src, alt, title, year, extra, children }) {
 }
 
 function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library, embyConfig, status, lastSynced, syncLibrary, suggestedSequel, onCycleSequel, hasMultipleSequels, updateAvailable }) {
+  const timeFormat       = useConfigStore(s => s.timeFormat);
   const isChainActive    = ["chain", "search-first", "pick-movie"].includes(screen);
   const isSettingsActive = screen === "settings";
   const isReportsActive  = screen === "reports";
@@ -54,7 +56,7 @@ function Sidebar({ screen, go, entries, undo, currentLink, currentMovie, library
   const lastSyncedDate = lastSynced ? new Date(lastSynced) : null;
   const embyBadge = embyConfig ? {
     syncing:      { label: "Emby syncing…",   color: T.warn },
-    synced:       { label: lastSyncedDate ? lastSyncedDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "synced", color: T.success },
+    synced:       { label: lastSyncedDate ? `Last Emby Sync: ${formatTime(lastSyncedDate, timeFormat)}` : "Emby Synced", color: T.success },
     error:        { label: "Emby error",       color: T.danger },
     disconnected: { label: "Emby off",         color: T.text3 },
   }[status] : null;

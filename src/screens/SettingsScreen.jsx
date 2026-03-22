@@ -6,9 +6,10 @@ import { useEmbyStore } from "../stores/embyStore.js";
 import { ErrBanner } from "../components/banners.jsx";
 import { SectionLabel, StatusPill } from "../components/primitives.jsx";
 import { useState } from "react";
+import { formatTime } from "../utils.js";
 
 export function SettingsScreen({ go }) {
-  const { tmdbKey, embyConfig, setEmbyConfig, syncInterval, setSyncInterval } = useConfigStore();
+  const { tmdbKey, embyConfig, setEmbyConfig, syncInterval, setSyncInterval, timeFormat, setTimeFormat } = useConfigStore();
   const { entries, clear: clearChain, importChain } = useChainStore();
   const { library, status, lastSynced, syncLibrary, clearLibrary } = useEmbyStore();
   const [error, setError] = useState("");
@@ -113,7 +114,7 @@ export function SettingsScreen({ go }) {
                 ))}
               </select>
               <span style={{ fontSize: 12, color: T.text2 }}>
-                {lastSyncedDate ? `· last synced ${lastSyncedDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "· not yet synced"}
+                {lastSyncedDate ? `· last synced ${formatTime(lastSyncedDate, timeFormat)}` : "· not yet synced"}
               </span>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -135,6 +136,22 @@ export function SettingsScreen({ go }) {
         <button onClick={() => { if (window.confirm("Clear the entire chain?")) { clearChain(); go("chain"); } }} className="danger" style={{ fontSize: 12 }}>
           Clear chain
         </button>
+      </div>
+
+      {/* Display */}
+      <div style={{ padding: "14px 16px", marginBottom: 12, background: T.bg2, border: `1px solid ${T.border}`, borderRadius: 8 }}>
+        <SectionLabel>Display</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <label style={{ fontSize: 12, color: T.text2, whiteSpace: "nowrap" }}>Time format</label>
+          <select
+            value={timeFormat}
+            onChange={e => setTimeFormat(e.target.value)}
+            style={{ fontSize: 12, padding: "4px 8px" }}
+          >
+            <option value="24h">24-hour (14:30)</option>
+            <option value="12h">12-hour (02:30 PM)</option>
+          </select>
+        </div>
       </div>
 
       {/* Backup */}
