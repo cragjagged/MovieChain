@@ -50,7 +50,9 @@ jobs:
         shell: pwsh
         run: |
           choco install nssm -y --no-progress
-          Copy-Item "C:\ProgramData\chocolatey\lib\NSSM\tools\win64\nssm.exe" "installer\nssm.exe"
+          $nssm = Get-ChildItem "C:\ProgramData\chocolatey\lib\NSSM" -Recurse -Filter "nssm.exe" | Sort-Object Length -Descending | Select-Object -First 1
+          Write-Host "Using nssm from: $($nssm.FullName) ($($nssm.Length) bytes)"
+          Copy-Item $nssm.FullName "installer\nssm.exe"
           & "installer\nssm.exe" version
 
       - name: Build installer with Inno Setup
